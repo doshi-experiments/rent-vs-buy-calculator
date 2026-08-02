@@ -144,6 +144,8 @@ function simulate(p) {
   const saleTax = grossSale - taxableUse;
 
   const marg = p.marginalTaxPct / 100;
+  const remodelMonths = p.remodelCost > 0 ? Math.max(1, Math.round(p.remodelYears * 12)) : 0;
+  const remodelMo = remodelMonths > 0 ? p.remodelCost / remodelMonths : 0;
   const hasSuite = p.suiteRentMo > 0; // no suite: no rental income, nothing deductible
   const hbpAnnual = hbpUse / 15;
   const hbpGraceMonths = 24; // 2026 onward: repayments begin the second year after
@@ -185,7 +187,8 @@ function simulate(p) {
     totRentOut = 0,
     totMaint = 0,
     totPropTax = 0,
-    totSuite = 0;
+    totSuite = 0,
+    totRemodel = 0;
   let payoffMonth = null;
   let y1Buy = null;
   let y1Rent = null;
@@ -230,7 +233,8 @@ function simulate(p) {
     const ins = (p.insYr / 12) * infl;
     const util = (p.utilYr / 12) * infl;
     const strata = p.strataMo * infl;
-    const gross = pi + propTax + maint + ins + util + strata;
+    const remodel = m <= remodelMonths ? remodelMo : 0;
+    const gross = pi + propTax + maint + ins + util + strata + remodel;
 
     const yearIdx = Math.floor((m - 1) / 12);
 
@@ -294,11 +298,12 @@ function simulate(p) {
     totBuyOut += buyCost + hbpFlow;
     totRentOut += rentCost;
     totMaint += maint;
+    totRemodel += remodel;
     totPropTax += propTax;
     totSuite += suite;
 
     if (m === 12 || (m === months && y1Buy === null)) {
-      y1Buy = { pi, propTax, maint, ins, util, strata, gross, suite, suiteTax, total: buyCost };
+      y1Buy = { pi, propTax, maint, ins, util, strata, remodel, gross, suite, suiteTax, total: buyCost };
       y1Rent = { rent: contractRent, ins: p.rentInsMo * infl, total: rentCost };
     }
 
@@ -383,6 +388,7 @@ function simulate(p) {
     cashUse,
     grossSale,
     saleTax,
+    saleGain: grossSale * gainFrac,
     hbpAnnual,
     hbpMonthly: p.hbpRepay ? hbpAnnual / 12 : 0,
     hbpTaxMonthly: p.hbpRepay ? 0 : (hbpAnnual * marg) / 12,
@@ -414,6 +420,8 @@ function simulate(p) {
     totMaint,
     totPropTax,
     totSuite,
+    totRemodel,
+    remodelMo,
     fullInterest,
     payoffMonth,
     y1Buy,
@@ -642,6 +650,8 @@ const DEFAULTS = {
   hog: true,
   insYr: 2400,
   maintYr: 6000,
+  remodelCost: 0,
+  remodelYears: 2,
   utilYr: 1400,
   strataMo: 0,
   rentMo: 3200,
@@ -675,6 +685,7 @@ const KEYS = {
   homePrice: "p", downPct: "d", apprPct: "a", firstTime: "ft", legalFees: "lf",
   rate: "r", renewalRate: "rr", termYears: "tm", amortYears: "am", sellCostPct: "sc",
   propTaxPct: "pt", hog: "hg", insYr: "ins", maintYr: "mt", utilYr: "ut", strataMo: "st",
+  remodelCost: "rc", remodelYears: "ry",
   rentMo: "rm", rentGrowthPct: "rg", marketRentGrowthPct: "mg", moveEveryYears: "mv",
   moveCost: "mc", rentInsMo: "ri", suiteRentMo: "sr", suiteGrowthPct: "sg",
   suiteVacancyPct: "sv", suiteSharePct: "ss", marginalTaxPct: "mx",
@@ -843,7 +854,7 @@ export default function RentVsBuy() {
   const xTicks = [];
   for (let y = 0; y <= p.horizonYears; y += tickStep) xTicks.push(y);
 
-  const y1 = r.y1Buy || { pi: 0, propTax: 0, maint: 0, ins: 0, util: 0, strata: 0, gross: 0, suite: 0, total: 0 };
+  const y1 = r.y1Buy || { pi: 0, propTax: 0, maint: 0, ins: 0, util: 0, strata: 0, remodel: 0, gross: 0, suite: 0, total: 0 };
   const y1r = r.y1Rent || { rent: 0, ins: 0, total: 0 };
   const barMax = Math.max(y1.gross, y1r.total) || 1;
   const costParts = [
@@ -853,6 +864,7 @@ export default function RentVsBuy() {
     ["Insurance", y1.ins],
     ["City utilities", y1.util],
     ["Strata fee", y1.strata],
+    ["Remodelling", y1.remodel],
   ].filter((x) => x[1] > 0.5);
 
   const beText =
@@ -1181,7 +1193,18 @@ export default function RentVsBuy() {
                       )
                     }
                   />
-                  <Field label="Unrealized gain on it" suffix="%" step={5} value={raw.taxableGainPct} onChange={set("taxableGainPct")} hint="Of what you'd sell" />
+                  <Field
+                    label="Share of it that's gain"
+                    suffix="%"
+                    step={5}
+                    value={raw.taxableGainPct}
+                    onChange={set("taxableGainPct")}
+                    hint={
+                      r.taxableUse > 0
+                        ? usd(r.saleGain) + " of gain \u2192 " + usd(r.saleTax) + " tax at " + p.capGainsPct + "%"
+                        : "Only the gain is taxed"
+                    }
+                  />
                 </div>
                 <div style={{ marginTop: 10 }}>
                   <div className="flex" style={{ height: 12, borderRadius: 2, overflow: "hidden" }}>
@@ -1276,6 +1299,10 @@ export default function RentVsBuy() {
                 <Field label="Maintenance" prefix="$" suffix="/yr" step={500} value={raw.maintYr} onChange={set("maintYr")} hint="Roof, furnace, repairs" />
                 <Field label="City utilities" prefix="$" suffix="/yr" step={100} value={raw.utilYr} onChange={set("utilYr")} hint="Water, sewer, garbage" />
                 <Field label="Strata fee" prefix="$" suffix="/mo" step={25} value={raw.strataMo} onChange={set("strataMo")} hint="0 for detached" />
+                <Field label="Remodelling budget" prefix="$" step={5000} value={raw.remodelCost} onChange={set("remodelCost")} hint={p.remodelCost > 0 ? usd(r.remodelMo) + "/mo while it runs" : "0 if move-in ready"} />
+                {p.remodelCost > 0 && (
+                  <Field label="Remodel over" suffix="yr" step={1} value={raw.remodelYears} onChange={set("remodelYears")} hint="Spread evenly" />
+                )}
               </Group>
               <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: -12 }}>
                 <input
@@ -1583,6 +1610,12 @@ export default function RentVsBuy() {
                 <Row label={"Interest paid by year " + p.horizonYears} value={usd(r.totInterest)} />
                 <Row label={"Principal paid by year " + p.horizonYears} value={usd(r.totPrincipal)} tone={C.buy} />
                 <Row label={"Balance left at year " + p.horizonYears} value={usd(r.balanceEnd)} />
+                {r.totRemodel > 0.5 && (
+                  <Row label={"Remodelling by year " + p.horizonYears} value={usd(r.totRemodel)} tone={C.rent} />
+                )}
+                {p.suiteRentMo > 0 && (
+                  <Row label={"Suite income by year " + p.horizonYears} value={usd(r.totSuite)} tone={C.buy} />
+                )}
                 <Row
                   label={
                     r.breakPenalty > 0
@@ -1829,7 +1862,10 @@ export default function RentVsBuy() {
               way there is in the US. Your rate is fixed only for the term; after that
               everything renews at the renewal rate. The CMHC premium is financed into the
               mortgage, so you pay interest on it. Property tax follows the home's assessed
-              value, which is assumed to track market value. RRSP and FHSA money is valued
+              value, which is assumed to track market value. Remodelling is treated purely as
+              a cost spread over your chosen period — it does not raise the home's value or
+              rent, which is conservative; if your renovation adds real value, raise the
+              appreciation rate or the suite rent to reflect it. RRSP and FHSA money is valued
               after tax at your marginal rate on both sides, since a renter eventually withdraws
               it and an FHSA that never buys a home rolls into an RRSP; HBP repayments go back
               into the RRSP and compound there at the same market return. If the suite's deductions exceed
