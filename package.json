@@ -17,6 +17,7 @@
     "@ibm/plex-sans": "1.1.0",
     "@ibm/plex-serif": "2.0.0",
     "esbuild": "0.21.5",
-    "tailwindcss": "3.4.17"
+    "tailwindcss": "3.4.17",
+    "wrangler": "^4.118.0"
   }
 }

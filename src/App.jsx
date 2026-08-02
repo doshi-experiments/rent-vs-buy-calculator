@@ -120,10 +120,22 @@ function simulate(p) {
   // Where the cash to close comes from. Each dollar carries its own tax character.
   const cashNeeded = down + closing;
   const capMult = p.couple ? 2 : 1;
-  const fhsaUse = Math.max(0, Math.min(p.fhsaUse, 40000 * capMult, cashNeeded));
-  const hbpUse = Math.max(0, Math.min(p.hbpUse, 60000 * capMult, cashNeeded - fhsaUse));
-  const taxableUse = Math.max(0, Math.min(p.taxableUse, cashNeeded - fhsaUse - hbpUse));
-  const cashUse = Math.max(0, cashNeeded - fhsaUse - hbpUse - taxableUse);
+  const fhsaCap = 40000 * capMult;
+  const hbpCap = 60000 * capMult;
+
+  const fhsaUse = Math.max(0, Math.min(p.fhsaUse, fhsaCap, cashNeeded));
+  const hbpUse = Math.max(0, Math.min(p.hbpUse, hbpCap, cashNeeded - fhsaUse));
+  const savingsUse = Math.max(0, Math.min(p.cashSavings, cashNeeded - fhsaUse - hbpUse));
+  const remainder = Math.max(0, cashNeeded - fhsaUse - hbpUse - savingsUse);
+
+  // Brokerage fills the gap unless the user has pinned it themselves
+  const taxableUse = p.autoBrokerage
+    ? remainder
+    : Math.max(0, Math.min(p.taxableUse, remainder));
+
+  // Anything a pinned brokerage figure leaves uncovered has to come from cash
+  const shortfall = remainder - taxableUse;
+  const cashUse = savingsUse + shortfall;
 
   // Selling shares to fund a down payment realises the gain today
   const gainFrac = Math.min(1, Math.max(0, p.taxableGainPct / 100));
@@ -377,10 +389,13 @@ function simulate(p) {
     totHbpRepaid,
     totHbpTax,
     registeredUsed: fhsaUse + hbpUse,
-    overCap:
-      p.fhsaUse > 40000 * capMult || p.hbpUse > 60000 * capMult,
-    fhsaCap: 40000 * capMult,
-    hbpCap: 60000 * capMult,
+    overCap: p.fhsaUse > fhsaCap || p.hbpUse > hbpCap,
+    fhsaCap,
+    hbpCap,
+    savingsUse,
+    shortfall,
+    remainder,
+    autoBrokerage: p.autoBrokerage,
     sourcesTotal: fhsaUse + hbpUse + taxableUse + cashUse,
     buyRegEnd: buyReg,
     rentRegEnd: rentReg,
@@ -428,19 +443,15 @@ function Eyebrow({ children, tone }) {
   );
 }
 
-function Field({ label, value, onChange, prefix, suffix, step = 1, hint }) {
+function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }) {
   return (
     <label className="block">
       <span
-        style={{
-          fontFamily: SANS,
-          fontSize: 12,
-          color: C.mute,
-          display: "block",
-          marginBottom: 4,
-        }}
+        className="flex items-baseline justify-between"
+        style={{ marginBottom: 4, gap: 6 }}
       >
-        {label}
+        <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>{label}</span>
+        {badge}
       </span>
       <span
         className="flex items-center"
@@ -647,6 +658,8 @@ const DEFAULTS = {
   fhsaUse: 40000,
   hbpUse: 60000,
   taxableUse: 100000,
+  cashSavings: 0,
+  autoBrokerage: true,
   taxableGainPct: 40,
   hbpRepay: true,
   couple: false,
@@ -666,6 +679,7 @@ const KEYS = {
   moveCost: "mc", rentInsMo: "ri", suiteRentMo: "sr", suiteGrowthPct: "sg",
   suiteVacancyPct: "sv", suiteSharePct: "ss", marginalTaxPct: "mx",
   fhsaUse: "fh", hbpUse: "hb", taxableUse: "tx", taxableGainPct: "tg",
+  cashSavings: "cs", autoBrokerage: "ab",
   hbpRepay: "hr", couple: "cp",
   investPct: "iv", capGainsPct: "cg", feeDragPct: "fd", inflPct: "if",
   horizonYears: "h",
@@ -1119,9 +1133,54 @@ export default function RentVsBuy() {
                   <span style={{ fontFamily: SANS, fontSize: 12.5 }}>Buying with a partner</span>
                 </label>
                 <div className="rvb-fields mt-3">
-                  <Field label="From FHSA" prefix="$" step={1000} value={raw.fhsaUse} onChange={set("fhsaUse")} hint={"Tax-free · cap " + usd(r.fhsaCap)} />
-                  <Field label="From RRSP (HBP)" prefix="$" step={1000} value={raw.hbpUse} onChange={set("hbpUse")} hint={"Repayable · cap " + usd(r.hbpCap)} />
-                  <Field label="From brokerage" prefix="$" step={1000} value={raw.taxableUse} onChange={set("taxableUse")} hint={r.saleTax > 0 ? "Tax to sell " + usd(r.saleTax) : "Triggers capital gains"} />
+                  <Field label="From FHSA" prefix="$" step={1000} value={raw.fhsaUse} onChange={set("fhsaUse")} hint={"Tax-free \u00b7 cap " + usd(r.fhsaCap)} />
+                  <Field label="From RRSP (HBP)" prefix="$" step={1000} value={raw.hbpUse} onChange={set("hbpUse")} hint={"Repayable \u00b7 cap " + usd(r.hbpCap)} />
+                  <Field label="From cash / savings" prefix="$" step={1000} value={raw.cashSavings} onChange={set("cashSavings")} hint="No tax to use it" />
+                  <Field
+                    label="From brokerage"
+                    prefix="$"
+                    step={1000}
+                    value={p.autoBrokerage ? Math.round(r.taxableUse) : raw.taxableUse}
+                    onChange={(v) => setRaw((st) => ({ ...st, taxableUse: v, autoBrokerage: false }))}
+                    hint={r.saleTax > 0 ? "Tax to sell " + usd(r.saleTax) : "Triggers capital gains"}
+                    badge={
+                      p.autoBrokerage ? (
+                        <span
+                          style={{
+                            fontFamily: MONO,
+                            fontSize: 9,
+                            letterSpacing: "0.1em",
+                            color: C.buy,
+                            border: "1px solid " + C.buySoft,
+                            borderRadius: 2,
+                            padding: "1px 4px",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          AUTO
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setRaw((st) => ({ ...st, autoBrokerage: true }))}
+                          style={{
+                            fontFamily: MONO,
+                            fontSize: 9,
+                            letterSpacing: "0.1em",
+                            color: C.mute,
+                            background: "transparent",
+                            border: "1px solid " + C.line,
+                            borderRadius: 2,
+                            padding: "1px 4px",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          RESET
+                        </button>
+                      )
+                    }
+                  />
                   <Field label="Unrealized gain on it" suffix="%" step={5} value={raw.taxableGainPct} onChange={set("taxableGainPct")} hint="Of what you'd sell" />
                 </div>
                 <div style={{ marginTop: 10 }}>
@@ -1129,8 +1188,8 @@ export default function RentVsBuy() {
                     {[
                       ["FHSA", r.fhsaUse, C.buy],
                       ["RRSP", r.hbpUse, "#4C8D80"],
-                      ["Brokerage", r.taxableUse, C.signal],
                       ["Cash", r.cashUse, "#AED4CC"],
+                      ["Brokerage", r.taxableUse, C.signal],
                     ].map(([n2, v, col]) =>
                       v > 0 ? (
                         <div key={n2} title={n2 + " " + usd(v)} style={{ width: (v / Math.max(1, r.sourcesTotal)) * 100 + "%", background: col }} />
@@ -1139,12 +1198,18 @@ export default function RentVsBuy() {
                   </div>
                   <div className="flex items-baseline justify-between" style={{ marginTop: 5 }}>
                     <span style={{ fontFamily: SANS, fontSize: 11, color: C.mute }}>
-                      Cash / savings needed
+                      Adds up to your cash to close
                     </span>
-                    <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600 }}>
-                      {usd(r.cashUse)}
+                    <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, color: C.buy }}>
+                      {usd(r.sourcesTotal)}
                     </span>
                   </div>
+                  {!p.autoBrokerage && r.shortfall > 0.5 && (
+                    <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 4, lineHeight: 1.4 }}>
+                      Your sources leave {usd(r.shortfall)} uncovered, so it's counted as extra
+                      cash. Hit RESET to let the brokerage figure balance again.
+                    </div>
+                  )}
                 </div>
                 {r.overCap && (
                   <div style={{ background: "#F6E9EE", borderRadius: 3, padding: 8, marginTop: 8, fontFamily: SANS, fontSize: 11.5, color: C.rent, lineHeight: 1.4 }}>
