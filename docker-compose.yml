@@ -1,0 +1,6 @@
+services:
+  rentvsbuy:
+    build: .
+    ports:
+      - "8099:80"
+    restart: unless-stopped

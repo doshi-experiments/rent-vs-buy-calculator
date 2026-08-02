@@ -1,0 +1,16 @@
+{
+  "name": "Rent vs Buy — Lower Mainland",
+  "short_name": "Rent vs Buy",
+  "description": "Rent versus buy for Metro Vancouver and the Lower Mainland, with mortgage helper income, BC transfer tax and CMHC.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#E7E9E3",
+  "theme_color": "#E7E9E3",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

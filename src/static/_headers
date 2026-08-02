@@ -1,0 +1,12 @@
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/*.png
+  Cache-Control: public, max-age=604800
+/app.js
+  Cache-Control: public, max-age=3600
+/app.css
+  Cache-Control: public, max-age=3600
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache

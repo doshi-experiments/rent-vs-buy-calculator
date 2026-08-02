@@ -1,0 +1,22 @@
+{
+  "name": "rent-vs-buy",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Rent vs buy calculator for Metro Vancouver and the Lower Mainland",
+  "scripts": {
+    "build": "./build.sh",
+    "serve": "npx --yes serve dist -l 8099"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "2.12.7"
+  },
+  "devDependencies": {
+    "@ibm/plex-mono": "2.5.0",
+    "@ibm/plex-sans": "1.1.0",
+    "@ibm/plex-serif": "2.0.0",
+    "esbuild": "0.21.5",
+    "tailwindcss": "3.4.17"
+  }
+}
