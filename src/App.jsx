@@ -146,6 +146,9 @@ function simulate(p) {
   const marg = p.marginalTaxPct / 100;
   const remodelMonths = p.remodelCost > 0 ? Math.max(1, Math.round(p.remodelYears * 12)) : 0;
   const remodelMo = remodelMonths > 0 ? p.remodelCost / remodelMonths : 0;
+  // Value added lands on the home as the work completes, then appreciates with it
+  const remodelValue = p.remodelCost > 0 ? (p.remodelCost * p.remodelRecoveryPct) / 100 : 0;
+  const remodelValueMo = remodelMonths > 0 ? remodelValue / remodelMonths : 0;
   const hasSuite = p.suiteRentMo > 0; // no suite: no rental income, nothing deductible
   const hbpAnnual = hbpUse / 15;
   const hbpGraceMonths = 24; // 2026 onward: repayments begin the second year after
@@ -234,6 +237,7 @@ function simulate(p) {
     const util = (p.utilYr / 12) * infl;
     const strata = p.strataMo * infl;
     const remodel = m <= remodelMonths ? remodelMo : 0;
+    if (m <= remodelMonths) homeValue += remodelValueMo;
     const gross = pi + propTax + maint + ins + util + strata + remodel;
 
     const yearIdx = Math.floor((m - 1) / 12);
@@ -422,6 +426,7 @@ function simulate(p) {
     totSuite,
     totRemodel,
     remodelMo,
+    remodelValue,
     fullInterest,
     payoffMonth,
     y1Buy,
@@ -652,6 +657,7 @@ const DEFAULTS = {
   maintYr: 6000,
   remodelCost: 0,
   remodelYears: 2,
+  remodelRecoveryPct: 50,
   utilYr: 1400,
   strataMo: 0,
   rentMo: 3200,
@@ -685,7 +691,7 @@ const KEYS = {
   homePrice: "p", downPct: "d", apprPct: "a", firstTime: "ft", legalFees: "lf",
   rate: "r", renewalRate: "rr", termYears: "tm", amortYears: "am", sellCostPct: "sc",
   propTaxPct: "pt", hog: "hg", insYr: "ins", maintYr: "mt", utilYr: "ut", strataMo: "st",
-  remodelCost: "rc", remodelYears: "ry",
+  remodelCost: "rc", remodelYears: "ry", remodelRecoveryPct: "rv",
   rentMo: "rm", rentGrowthPct: "rg", marketRentGrowthPct: "mg", moveEveryYears: "mv",
   moveCost: "mc", rentInsMo: "ri", suiteRentMo: "sr", suiteGrowthPct: "sg",
   suiteVacancyPct: "sv", suiteSharePct: "ss", marginalTaxPct: "mx",
@@ -1301,7 +1307,17 @@ export default function RentVsBuy() {
                 <Field label="Strata fee" prefix="$" suffix="/mo" step={25} value={raw.strataMo} onChange={set("strataMo")} hint="0 for detached" />
                 <Field label="Remodelling budget" prefix="$" step={5000} value={raw.remodelCost} onChange={set("remodelCost")} hint={p.remodelCost > 0 ? usd(r.remodelMo) + "/mo while it runs" : "0 if move-in ready"} />
                 {p.remodelCost > 0 && (
-                  <Field label="Remodel over" suffix="yr" step={1} value={raw.remodelYears} onChange={set("remodelYears")} hint="Spread evenly" />
+                  <>
+                    <Field label="Remodel over" suffix="yr" step={1} value={raw.remodelYears} onChange={set("remodelYears")} hint="Spread evenly" />
+                    <Field
+                      label="Value it adds to the home"
+                      suffix="%"
+                      step={5}
+                      value={raw.remodelRecoveryPct}
+                      onChange={set("remodelRecoveryPct")}
+                      hint={usd(r.remodelValue) + " \u00b7 most renos recover 50\u201380%"}
+                    />
+                  </>
                 )}
               </Group>
               <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: -12 }}>
@@ -1862,10 +1878,11 @@ export default function RentVsBuy() {
               way there is in the US. Your rate is fixed only for the term; after that
               everything renews at the renewal rate. The CMHC premium is financed into the
               mortgage, so you pay interest on it. Property tax follows the home's assessed
-              value, which is assumed to track market value. Remodelling is treated purely as
-              a cost spread over your chosen period — it does not raise the home's value or
-              rent, which is conservative; if your renovation adds real value, raise the
-              appreciation rate or the suite rent to reflect it. RRSP and FHSA money is valued
+              value, which is assumed to track market value. Remodelling cost is spread evenly
+              over your chosen period, and the value it adds lands on the home as the work
+              completes, at your chosen recovery rate, then appreciates with the house. It
+              does not change the suite's rent — raise that yourself if the reno is what
+              creates the suite. RRSP and FHSA money is valued
               after tax at your marginal rate on both sides, since a renter eventually withdraws
               it and an FHSA that never buys a home rolls into an RRSP; HBP repayments go back
               into the RRSP and compound there at the same market return. If the suite's deductions exceed
