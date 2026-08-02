@@ -636,11 +636,218 @@ function Row({ label, value, tone, strong }) {
   );
 }
 
+
+/* ------------------------------------------------------------------ *
+ *  Appreciation calculator
+ * ------------------------------------------------------------------ */
+function AppreciationTab({ raw, set, p, appr, onApply }) {
+  const pct = (n) => (n >= 0 ? "" : "\u2212") + Math.abs(n).toFixed(2) + "%";
+  const good = appr.valid && appr.cagr !== null;
+  const tone = !good ? C.mute : appr.cagr >= 0 ? C.buy : C.rent;
+
+  return (
+    <>
+      <header className="mb-7">
+        <Eyebrow>Compound annual growth rate</Eyebrow>
+        <h1
+          style={{
+            fontFamily: SERIF,
+            fontWeight: 500,
+            fontSize: "clamp(28px, 5vw, 52px)",
+            lineHeight: 1.06,
+            letterSpacing: "-0.02em",
+            margin: 0,
+            marginTop: 10,
+            maxWidth: 1020,
+          }}
+        >
+          {good ? (
+            <>
+              That works out to{" "}
+              <span style={{ color: tone, borderBottom: "3px solid " + tone }}>
+                {pct(appr.cagr)}
+              </span>{" "}
+              a year over {appr.years === Math.round(appr.years) ? appr.years : appr.years.toFixed(1)}{" "}
+              {Math.abs(appr.years) === 1 ? "year" : "years"}.
+            </>
+          ) : (
+            <>Enter two values and a period.</>
+          )}
+        </h1>
+        <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, maxWidth: 640, marginTop: 12, lineHeight: 1.5 }}>
+          Average annual growth isn't the total change divided by the years — growth compounds
+          on itself. This works out the rate that actually gets you from one value to the other.
+        </p>
+      </header>
+
+      <div className="rvb-main">
+        <div className="rvb-col">
+          <Panel>
+            <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+              Two points in time
+            </h2>
+            <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14 }}>
+              Works for a home, an index, or anything else that compounds.
+            </p>
+
+            <Group title="Then">
+              <Field label="Value" prefix="$" step={10000} value={raw.apprThen} onChange={set("apprThen")} />
+              {!p.apprUseSpan && (
+                <Field label="Year" step={1} value={raw.apprThenYear} onChange={set("apprThenYear")} />
+              )}
+            </Group>
+
+            <Group title="Now">
+              <Field label="Value" prefix="$" step={10000} value={raw.apprNow} onChange={set("apprNow")} />
+              {!p.apprUseSpan && (
+                <Field label="Year" step={1} value={raw.apprNowYear} onChange={set("apprNowYear")} />
+              )}
+            </Group>
+
+            <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={raw.apprUseSpan}
+                  onChange={(e) => set("apprUseSpan")(e.target.checked)}
+                  style={{ accentColor: C.buy, width: 14, height: 14 }}
+                />
+                <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+                  Use a time span instead of years
+                </span>
+              </label>
+              {p.apprUseSpan && (
+                <div className="mt-3">
+                  <Field label="Over how long" suffix="yr" step={1} value={raw.apprSpan} onChange={set("apprSpan")} hint="Decimals are fine \u2014 1.5 for 18 months" />
+                </div>
+              )}
+            </div>
+          </Panel>
+        </div>
+
+        <div className="rvb-col">
+          <Panel className="mb-5">
+            <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 12 }}>
+              The numbers
+            </h2>
+            <Row label="Average annual growth" value={good ? pct(appr.cagr) : "\u2014"} tone={tone} strong />
+            <Row label="Total change" value={good ? pct(appr.totalPct) : "\u2014"} />
+            <Row label="Change in dollars" value={good ? usd(appr.now - appr.then) : "\u2014"} />
+            <Row label="Years elapsed" value={good ? String(Math.round(appr.years * 100) / 100) : "\u2014"} />
+            <Row
+              label="Multiple of the starting value"
+              value={good ? (appr.now / appr.then).toFixed(2) + "\u00d7" : "\u2014"}
+            />
+            {good && appr.doubling && appr.cagr > 0 && (
+              <Row label="At this rate, doubles every" value={appr.doubling.toFixed(1) + " yr"} />
+            )}
+
+            {good && (
+              <button
+                onClick={() => onApply(appr.cagr)}
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#fff",
+                  background: C.buy,
+                  border: "none",
+                  borderRadius: 3,
+                  padding: "9px 14px",
+                  marginTop: 14,
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                Use {pct(appr.cagr)} in the rent vs. buy calculator
+              </button>
+            )}
+            <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 8, lineHeight: 1.45 }}>
+              Careful with this one. A rate measured over a particular decade is history, not a
+              forecast — pick a start year at the top of a boom and you'll flatter the future.
+            </div>
+          </Panel>
+
+          {good && appr.curve.length > 1 && (
+            <Panel>
+              <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+                The same rate, projected on
+              </h2>
+              <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 10 }}>
+                Solid is what happened. Dashed is the next ten years at the same rate — an
+                illustration, not a prediction.
+              </p>
+              <div style={{ width: "100%", height: 260 }}>
+                <ResponsiveContainer>
+                  <ComposedChart data={appr.curve} margin={{ top: 6, right: 10, bottom: 4, left: 0 }}>
+                    <CartesianGrid stroke={C.line} vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontFamily: MONO, fontSize: 10.5, fill: C.mute }}
+                      stroke={C.line}
+                      interval={Math.max(0, Math.floor(appr.curve.length / 8) - 1)}
+                    />
+                    <YAxis
+                      tickFormatter={compact}
+                      tick={{ fontFamily: MONO, fontSize: 10.5, fill: C.mute }}
+                      stroke={C.line}
+                      width={58}
+                    />
+                    <Tooltip
+                      cursor={{ stroke: C.mute, strokeDasharray: "3 3" }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload || !payload.length) return null;
+                        const d = payload[0].payload;
+                        return (
+                          <div style={{ background: "#fff", border: "1px solid " + C.line, borderRadius: 3, padding: "8px 10px", fontFamily: MONO, fontSize: 12 }}>
+                            <div style={{ color: C.mute, fontSize: 10.5, marginBottom: 3 }}>
+                              {d.label}
+                              {d.projected ? " \u00b7 PROJECTED" : ""}
+                            </div>
+                            <div>{usd(d.value)}</div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <ReferenceLine
+                      x={p.apprUseSpan ? Math.round(appr.years) : p.apprNowYear}
+                      stroke={C.signal}
+                      strokeWidth={2}
+                      label={{ value: "today", position: "top", offset: 6, fontFamily: MONO, fontSize: 10, fill: C.signal }}
+                    />
+                    <Line
+                      dataKey={(d) => (d.projected ? null : d.value)}
+                      stroke={C.buy}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                    />
+                    <Line
+                      dataKey={(d) => (d.projected ? d.value : null)}
+                      stroke={C.buy}
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ------------------------------------------------------------------ *
  *  Main
  * ------------------------------------------------------------------ */
 const DEFAULTS = {
-  // Metro Vancouver / Lower Mainland, July 2026
+  // British Columbia, July 2026
   homePrice: 1450000,
   downPct: 20,
   apprPct: 3,
@@ -679,11 +886,18 @@ const DEFAULTS = {
   taxableGainPct: 40,
   hbpRepay: true,
   couple: false,
-  investPct: 6.5,
+  investPct: 7,
   feeDragPct: 0.5,
   capGainsPct: 20,
   inflPct: 2.5,
   horizonYears: 10,
+  // Appreciation tool
+  apprThen: 850000,
+  apprThenYear: 2016,
+  apprNow: 1450000,
+  apprNowYear: 2026,
+  apprUseSpan: false,
+  apprSpan: 10,
 };
 
 
@@ -700,6 +914,8 @@ const KEYS = {
   hbpRepay: "hr", couple: "cp",
   investPct: "iv", capGainsPct: "cg", feeDragPct: "fd", inflPct: "if",
   horizonYears: "h",
+  apprThen: "at", apprThenYear: "aty", apprNow: "an", apprNowYear: "any",
+  apprUseSpan: "aus", apprSpan: "asp",
 };
 const CODE_TO_KEY = Object.fromEntries(Object.entries(KEYS).map(([k, v]) => [v, k]));
 
@@ -772,6 +988,7 @@ export default function RentVsBuy() {
     setTimeout(() => setCopied(false), 1800);
   };
   const [showLedger, setShowLedger] = useState(false);
+  const [tab, setTab] = useState("buy");
 
   const p = useMemo(() => {
     const o = {};
@@ -781,6 +998,30 @@ export default function RentVsBuy() {
 
   const set = (k) => (v) => setRaw((s) => ({ ...s, [k]: v }));
   const r = useMemo(() => simulate(p), [p]);
+
+  // Appreciation tool
+  const appr = useMemo(() => {
+    const then = p.apprThen;
+    const now = p.apprNow;
+    const years = p.apprUseSpan ? p.apprSpan : p.apprNowYear - p.apprThenYear;
+    const valid = then > 0 && now > 0 && years > 0;
+    const cagr = valid ? (Math.pow(now / then, 1 / years) - 1) * 100 : null;
+    const totalPct = then > 0 ? (now / then - 1) * 100 : null;
+    const doubling = cagr && cagr > 0 ? Math.log(2) / Math.log(1 + cagr / 100) : null;
+    const curve = [];
+    if (valid) {
+      const span = Math.ceil(years);
+      for (let k = 0; k <= span + 10; k++) {
+        curve.push({
+          k,
+          label: p.apprUseSpan ? k : p.apprThenYear + k,
+          value: then * Math.pow(now / then, k / years),
+          projected: k > years,
+        });
+      }
+    }
+    return { then, now, years, valid, cagr, totalPct, doubling, curve };
+  }, [p]);
 
   const sens = useMemo(() => {
     const appr = [-2, -1, 0, 1, 2].map((d) => ({
@@ -937,10 +1178,50 @@ export default function RentVsBuy() {
       <style>{css}</style>
 
       <div className="rvb-shell px-5 py-8">
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-5" style={{ borderBottom: "1px solid " + C.line }}>
+          {[
+            ["buy", "Rent vs. buy"],
+            ["appreciation", "Appreciation calculator"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              style={{
+                fontFamily: SANS,
+                fontSize: 13.5,
+                fontWeight: tab === id ? 600 : 400,
+                color: tab === id ? C.ink : C.mute,
+                background: "transparent",
+                border: "none",
+                borderBottom: "2px solid " + (tab === id ? C.buy : "transparent"),
+                padding: "8px 12px",
+                marginBottom: -1,
+                cursor: "pointer",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "appreciation" ? (
+          <AppreciationTab
+            raw={raw}
+            set={set}
+            p={p}
+            appr={appr}
+            onApply={(v) => {
+              set("apprPct")(v.toFixed(2));
+              setTab("buy");
+            }}
+          />
+        ) : (
+        <>
         {/* HERO — the verdict is the headline */}
         <header className="mb-7">
           <div className="flex items-center justify-between mb-4">
-            <Eyebrow>Rent vs. buy · Metro Vancouver · net worth after costs and taxes</Eyebrow>
+            <Eyebrow>Rent vs. buy · British Columbia · net worth after costs and taxes</Eyebrow>
             <div className="flex items-center gap-2">
             <button
               onClick={copyLink}
@@ -1300,7 +1581,7 @@ export default function RentVsBuy() {
               )}
 
               <Group title="Owning costs">
-                <Field label="Property tax" suffix="%/yr" step={0.01} value={raw.propTaxPct} onChange={set("propTaxPct")} hint="Metro Vancouver ≈ 0.36%" />
+                <Field label="Property tax" suffix="%/yr" step={0.01} value={raw.propTaxPct} onChange={set("propTaxPct")} hint="Metro Vancouver ≈ 0.3–0.4%" />
                 <Field label="Home insurance" prefix="$" suffix="/yr" step={100} value={raw.insYr} onChange={set("insYr")} />
                 <Field label="Maintenance" prefix="$" suffix="/yr" step={500} value={raw.maintYr} onChange={set("maintYr")} hint="Roof, furnace, repairs" />
                 <Field label="City utilities" prefix="$" suffix="/yr" step={100} value={raw.utilYr} onChange={set("utilYr")} hint="Water, sewer, garbage" />
@@ -1336,7 +1617,7 @@ export default function RentVsBuy() {
               </div>
 
               <Group title="Renting">
-                <Field label="Rent today" prefix="$" suffix="/mo" step={50} value={raw.rentMo} onChange={set("rentMo")} hint="3-bed in Metro Vancouver ≈ $3,200" />
+                <Field label="Rent today" prefix="$" suffix="/mo" step={50} value={raw.rentMo} onChange={set("rentMo")} hint="3-bed, Metro Vancouver" />
                 <Field label="Increase while you stay" suffix="%/yr" step={0.1} value={raw.rentGrowthPct} onChange={set("rentGrowthPct")} hint="BC caps it: 2.3% in 2026" />
                 <Field label="Market rent growth" suffix="%/yr" step={0.25} value={raw.marketRentGrowthPct} onChange={set("marketRentGrowthPct")} hint="What you'd re-rent at" />
                 <Field label="You move every" suffix="yr" step={1} value={raw.moveEveryYears} onChange={set("moveEveryYears")} hint="0 if you never move" />
@@ -1906,6 +2187,8 @@ export default function RentVsBuy() {
             </p>
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

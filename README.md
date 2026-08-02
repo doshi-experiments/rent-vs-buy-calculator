@@ -1,6 +1,6 @@
-# Rent vs Buy — Lower Mainland
+# Rent vs Buy — British Columbia
 
-A self-contained rent-versus-buy calculator for Metro Vancouver and the wider Lower Mainland. No backend, no accounts, no analytics — every calculation runs in your browser, and nothing you type ever leaves the device.
+A self-contained rent-versus-buy calculator for British Columbia, with a compound-growth calculator alongside it. No backend, no accounts, no analytics — every calculation runs in your browser, and nothing you type ever leaves the device.
 
 Installs as an app on a phone and a laptop, works with no signal once installed, and every set of inputs is a shareable link.
 
