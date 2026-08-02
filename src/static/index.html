@@ -6,7 +6,28 @@
 <title>Rent vs Buy — British Columbia</title>
 <meta name="description" content="Rent versus buy for British Columbia, with mortgage helper income, property transfer tax, CMHC and an appreciation calculator.">
 <meta name="theme-color" content="#E7E9E3">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
+<!-- Theme is resolved before first paint, from a cookie scoped to
+     .rishabhdoshi.com so the choice carries over from the portfolio
+     and the experiments index. app.js is deferred, so without this the
+     dark-mode visitor gets a flash of the light shell on every load. -->
+<script>
+(function(){
+  var m=document.cookie.match(/(?:^|;\s*)sheet-theme=(light|dark)/),t=m&&m[1];
+  if(!t){ try{ t=localStorage.getItem('sheet-theme'); }catch(e){} }
+  if(t!=='light'&&t!=='dark')
+    t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+  var bg=t==='dark'?'#0E1C2B':'#E7E9E3';
+  var r=document.documentElement;
+  r.setAttribute('data-theme',t);
+  r.style.setProperty('--rvb-bg',bg);
+  r.style.colorScheme=t;
+  document.addEventListener('DOMContentLoaded',function(){
+    var mt=document.querySelector('meta[name="theme-color"]');
+    if(mt)mt.setAttribute('content',bg);
+  });
+})();
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon.png" sizes="32x32">
 <link rel="icon" href="icon.svg" type="image/svg+xml">

@@ -16,7 +16,13 @@ import {
 /* ------------------------------------------------------------------ *
  *  Palette + type
  * ------------------------------------------------------------------ */
-const C = {
+/* Two sheets, one drawing. `C` is deliberately mutable: it is read at
+ * render time by every component and by the <style> block below, so
+ * swapping its contents and re-rendering repaints the whole app. That
+ * beats threading a theme prop through ~2000 lines of JSX, and it keeps
+ * literal hex values going to Recharts, which will not resolve CSS
+ * variables in its SVG presentation attributes. */
+const LIGHT = {
   bg: "#E7E9E3",
   panel: "#FBFBF8",
   panelAlt: "#F1F2ED",
@@ -28,8 +34,63 @@ const C = {
   rent: "#8C2F5E",
   rentSoft: "#D9AEC1",
   signal: "#D9A408",
+  rentWash: "#F6E9EE",
+  grid: "#D2D6CE",
+  field: "#FFFFFF",
+  onBuy: "#FFFFFF",
 };
-const BUY_TINTS = ["#0F5C52", "#2E7568", "#4C8D80", "#6BA599", "#8ABDB3", "#AED4CC"];
+const DARK = {
+  bg: "#0E1C2B",
+  panel: "#14273A",
+  panelAlt: "#1A2F44",
+  ink: "#E8F0F7",
+  mute: "#93AABF",
+  line: "#2A4258",
+  buy: "#5CC0AE",
+  buySoft: "#2E6A61",
+  rent: "#E68AB4",
+  rentSoft: "#7A3355",
+  signal: "#E8BC3E",
+  rentWash: "#2A1B25",
+  grid: "#24394E",
+  field: "#0A1622",
+  onBuy: "#0E1C2B",
+};
+const LIGHT_TINTS = ["#0F5C52", "#2E7568", "#4C8D80", "#6BA599", "#8ABDB3", "#AED4CC"];
+const DARK_TINTS  = ["#5CC0AE", "#4EAD9C", "#419A8A", "#358878", "#2A7567", "#206356"];
+
+const C = { ...LIGHT };
+const BUY_TINTS = [...LIGHT_TINTS];
+
+function readTheme() {
+  const m = document.cookie.match(/(?:^|;\s*)sheet-theme=(light|dark)/);
+  let t = m && m[1];
+  if (!t) { try { t = localStorage.getItem("sheet-theme"); } catch (e) {} }
+  if (t !== "light" && t !== "dark")
+    t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  return t;
+}
+function applyPalette(t) {
+  Object.assign(C, t === "dark" ? DARK : LIGHT);
+  BUY_TINTS.length = 0;
+  BUY_TINTS.push(...(t === "dark" ? DARK_TINTS : LIGHT_TINTS));
+  const root = document.documentElement;
+  root.setAttribute("data-theme", t);
+  root.style.setProperty("--rvb-bg", C.bg);
+  root.style.colorScheme = t;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", C.bg);
+}
+function writeTheme(t) {
+  /* cookie is scoped to the registrable domain so the choice carries
+   * between rishabhdoshi.com, experiments. and rent-vs-buy. */
+  try {
+    document.cookie = "sheet-theme=" + t + ";domain=.rishabhdoshi.com;path=/;" +
+                      "max-age=31536000;samesite=lax";
+    document.cookie = "sheet-theme=" + t + ";path=/;max-age=31536000;samesite=lax";
+    localStorage.setItem("sheet-theme", t);
+  } catch (e) {}
+}
 const SERIF = "'IBM Plex Serif', Georgia, 'Times New Roman', serif";
 const SANS = "'IBM Plex Sans', system-ui, -apple-system, sans-serif";
 const MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
@@ -469,7 +530,7 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }
       <span
         className="flex items-center"
         style={{
-          background: "#fff",
+          background: C.field,
           border: "1px solid " + C.line,
           borderRadius: 3,
           paddingLeft: 8,
@@ -543,7 +604,7 @@ function SliderRow({ label, value, onChange, min, max, step, accent, suffix, pre
       <span
         className="flex items-center"
         style={{
-          background: "#fff",
+          background: C.field,
           border: "1px solid " + C.line,
           borderRadius: 3,
           paddingLeft: 7,
@@ -749,7 +810,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                   fontFamily: SANS,
                   fontSize: 13,
                   fontWeight: 600,
-                  color: "#fff",
+                  color: C.onBuy,
                   background: C.buy,
                   border: "none",
                   borderRadius: 3,
@@ -799,7 +860,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                         if (!active || !payload || !payload.length) return null;
                         const d = payload[0].payload;
                         return (
-                          <div style={{ background: "#fff", border: "1px solid " + C.line, borderRadius: 3, padding: "8px 10px", fontFamily: MONO, fontSize: 12 }}>
+                          <div style={{ background: C.field, border: "1px solid " + C.line, borderRadius: 3, padding: "8px 10px", fontFamily: MONO, fontSize: 12 }}>
                             <div style={{ color: C.mute, fontSize: 10.5, marginBottom: 3 }}>
                               {d.label}
                               {d.projected ? " \u00b7 PROJECTED" : ""}
@@ -954,6 +1015,16 @@ function hashToState() {
 export default function RentVsBuy() {
   const [raw, setRaw] = useState(() => ({ ...DEFAULTS, ...hashToState() }));
   const [copied, setCopied] = useState(false);
+
+  /* Applied during render, before any child reads C. Idempotent, so a
+   * double render costs nothing. */
+  const [theme, setTheme] = useState(readTheme);
+  applyPalette(theme);
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    writeTheme(next);
+    setTheme(next);
+  };
 
   // Mirror the inputs into the address bar so any view is a shareable link
   React.useEffect(() => {
@@ -1203,6 +1274,37 @@ export default function RentVsBuy() {
               {label}
             </button>
           ))}
+
+          {/* the same switch that sits on the two sheets */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={theme === "light"}
+            aria-label={theme === "light"
+              ? "Switch to the dark sheet" : "Switch to the light sheet"}
+            onClick={toggleTheme}
+            style={{
+              marginLeft: "auto", marginBottom: 6,
+              display: "flex", alignItems: "center",
+              width: 48, height: 24, padding: 2,
+              border: "1px solid " + C.line, borderRadius: 999,
+              background: C.panel, cursor: "pointer",
+              transition: "background-color .3s ease, border-color .2s ease",
+            }}
+          >
+            <span
+              style={{
+                display: "grid", placeItems: "center",
+                width: 18, height: 18, borderRadius: "50%",
+                background: C.buy, color: C.panel,
+                fontSize: 10, lineHeight: 1,
+                transform: theme === "light" ? "translateX(24px)" : "translateX(0)",
+                transition: "transform .3s cubic-bezier(.4,0,.2,1)",
+              }}
+            >
+              {theme === "light" ? "☀" : "☾"}
+            </span>
+          </button>
         </div>
 
         {tab === "appreciation" ? (
@@ -1497,8 +1599,8 @@ export default function RentVsBuy() {
                   <div className="flex" style={{ height: 12, borderRadius: 2, overflow: "hidden" }}>
                     {[
                       ["FHSA", r.fhsaUse, C.buy],
-                      ["RRSP", r.hbpUse, "#4C8D80"],
-                      ["Cash", r.cashUse, "#AED4CC"],
+                      ["RRSP", r.hbpUse, BUY_TINTS[2]],
+                      ["Cash", r.cashUse, BUY_TINTS[5]],
                       ["Brokerage", r.taxableUse, C.signal],
                     ].map(([n2, v, col]) =>
                       v > 0 ? (
@@ -1522,7 +1624,7 @@ export default function RentVsBuy() {
                   )}
                 </div>
                 {r.overCap && (
-                  <div style={{ background: "#F6E9EE", borderRadius: 3, padding: 8, marginTop: 8, fontFamily: SANS, fontSize: 11.5, color: C.rent, lineHeight: 1.4 }}>
+                  <div style={{ background: C.rentWash, borderRadius: 3, padding: 8, marginTop: 8, fontFamily: SANS, fontSize: 11.5, color: C.rent, lineHeight: 1.4 }}>
                     Over the limit — FHSA caps at {usd(r.fhsaCap)} and the HBP at {usd(r.hbpCap)}
                     {p.couple ? " for a couple" : " per person"}. Capped in the maths.
                   </div>
@@ -1571,7 +1673,7 @@ export default function RentVsBuy() {
                 </div>
               )}
               {r.belowMin && (
-                <div style={{ background: "#F6E9EE", borderRadius: 3, padding: 10, marginTop: -8 }} className="mb-6">
+                <div style={{ background: C.rentWash, borderRadius: 3, padding: 10, marginTop: -8 }} className="mb-6">
                   <div style={{ fontFamily: SANS, fontSize: 12, color: C.rent, lineHeight: 1.4 }}>
                     {r.insurable
                       ? "Below the legal minimum. You need at least " + usd(r.minDown) + " down — 5% of the first $500k, 10% of the rest."
@@ -1704,7 +1806,7 @@ export default function RentVsBuy() {
                         return (
                           <div
                             style={{
-                              background: "#fff",
+                              background: C.field,
                               border: "1px solid " + C.line,
                               borderRadius: 3,
                               padding: "8px 10px",
@@ -1939,7 +2041,7 @@ export default function RentVsBuy() {
                           if (!active || !payload || !payload.length) return null;
                           const d = payload[0].payload;
                           return (
-                            <div style={{ background: "#fff", border: "1px solid " + C.line, padding: "6px 9px", fontFamily: MONO, fontSize: 11.5 }}>
+                            <div style={{ background: C.field, border: "1px solid " + C.line, padding: "6px 9px", fontFamily: MONO, fontSize: 11.5 }}>
                               <div style={{ color: C.mute, fontSize: 10 }}>YEAR {label}</div>
                               <div style={{ color: C.buy }}>Principal {usd(d.principal)}</div>
                               <div style={{ color: C.rent }}>Interest {usd(d.interest)}</div>
