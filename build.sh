@@ -28,9 +28,11 @@ for fam in Sans Mono Serif; do
 done
 echo "  fonts: $(ls dist/fonts | wc -l | tr -d ' ')"
 
-# 4. app bundle + styles
+VERSION=$(node -p "require('./package.json').version")
 npx esbuild --bundle src/main.jsx --outfile=dist/app.js \
-  --jsx=automatic --minify --define:process.env.NODE_ENV='"production"' --log-level=warning
+  --jsx=automatic --minify --define:process.env.NODE_ENV='"production"' \
+  --define:__APP_VERSION__='"'$VERSION'"' --define:__BUILD_STAMP__='"'$BUILD'"' \
+  --log-level=warning
 npx tailwindcss -c tailwind.config.js -i src/tw.css -o dist/tw.out.css --minify 2>/dev/null
 cat src/fonts.css dist/tw.out.css > dist/app.css
 rm -f dist/tw.out.css

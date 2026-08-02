@@ -1,6 +1,6 @@
 {
   "name": "rent-vs-buy",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Rent vs buy calculator for Metro Vancouver and the Lower Mainland",
   "scripts": {

@@ -1890,6 +1890,20 @@ export default function RentVsBuy() {
               and strata fees grow with inflation. GST applies to new builds only and is not
               included. Everything is in nominal dollars. This is a model, not advice.
             </p>
+            <p
+              style={{
+                fontFamily: MONO,
+                fontSize: 10,
+                color: C.mute,
+                marginTop: 8,
+                letterSpacing: "0.06em",
+              }}
+            >
+              {"v" +
+                (typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev") +
+                " \u00b7 build " +
+                (typeof __BUILD_STAMP__ !== "undefined" ? __BUILD_STAMP__ : "local")}
+            </p>
           </div>
         </div>
       </div>
