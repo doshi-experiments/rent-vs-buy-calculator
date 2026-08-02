@@ -115,6 +115,21 @@ const num = (v) => {
 };
 const trim = (n) => n.toFixed(2).replace(/\.?0+$/, "");
 
+/* Filters typed or pasted text down to a number as you go, so "$1,450,000"
+ * becomes "1450000" instead of being rejected. The fields cannot use
+ * type="number" for this: browsers hand back an empty string for anything
+ * they consider invalid, so a single $ or comma silently blanked the field
+ * and every downstream figure recomputed against zero. Keeps one leading
+ * minus and at most one decimal point. */
+const cleanNum = (v) => {
+  let s = String(v).replace(/[^0-9.\-]/g, "");
+  const neg = s.startsWith("-");
+  s = s.replace(/-/g, "");
+  const dot = s.indexOf(".");
+  if (dot !== -1) s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, "");
+  return (neg ? "-" : "") + s;
+};
+
 /* ------------------------------------------------------------------ *
  *  BC-specific rules
  * ------------------------------------------------------------------ */
@@ -518,6 +533,36 @@ function Eyebrow({ children, tone }) {
 }
 
 function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }) {
+  // Says so when characters were dropped, rather than silently changing the
+  // number under the user — a stray letter in a pasted figure would
+  // otherwise become a different, plausible-looking value.
+  const [dropped, setDropped] = useState(false);
+  React.useEffect(() => {
+    if (!dropped) return;
+    const id = setTimeout(() => setDropped(false), 2600);
+    return () => clearTimeout(id);
+  }, [dropped]);
+
+  const handle = (e) => {
+    const typed = e.target.value;
+    const clean = cleanNum(typed);
+    // Write the cleaned text back to the DOM node as well as to state.
+    // React skips the re-render when the cleaned value happens to equal the
+    // value already in state — pasting "$1,450,000" over 1450000, say — and
+    // without this the rejected characters stay sitting in the field.
+    if (clean !== typed) e.target.value = clean;
+    setDropped(clean !== typed);
+    onChange(clean);
+  };
+  // type="text" loses the browser's arrow-key stepping, so put it back
+  const onKeyDown = (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const d = (e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? step * 10 : step);
+    setDropped(false);
+    onChange(trim(num(value) + d));
+  };
+
   return (
     <label className="block">
       <span
@@ -543,10 +588,12 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }
           </span>
         )}
         <input
-          type="number"
-          step={step}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={handle}
+          onKeyDown={onKeyDown}
           className="w-full"
           style={{
             fontFamily: MONO,
@@ -565,17 +612,17 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }
           </span>
         )}
       </span>
-      {hint && (
+      {(dropped || hint) && (
         <span
           style={{
             fontFamily: SANS,
             fontSize: 10.5,
-            color: C.mute,
+            color: dropped ? C.signal : C.mute,
             display: "block",
             marginTop: 3,
           }}
         >
-          {hint}
+          {dropped ? "Numbers only — other characters were ignored." : hint}
         </span>
       )}
     </label>
@@ -614,12 +661,15 @@ function SliderRow({ label, value, onChange, min, max, step, accent, suffix, pre
       >
         {prefix && <span style={{ fontFamily: MONO, fontSize: 13, color: C.mute }}>{prefix}</span>}
         <input
-          type="number"
-          min={min}
-          max={max}
-          step={step}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            const clean = cleanNum(e.target.value);
+            if (clean !== e.target.value) e.target.value = clean;  // see Field
+            onChange(clean);
+          }}
           aria-label={label + " value"}
           style={{
             fontFamily: MONO,
