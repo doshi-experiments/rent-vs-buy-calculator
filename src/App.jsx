@@ -955,6 +955,263 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Payment comparison
+ *
+ *  Five amounts against one set of conditions. "Amount" is deliberately
+ *  either a purchase price or a mortgage — asking for a price lets the
+ *  BC rules do their work (minimum down, CMHC premium financed into the
+ *  principal), but someone who already knows their loan figure should
+ *  not have to back into it through a down payment percentage.
+ * ------------------------------------------------------------------ */
+const CMP_SLOTS = ["cmpA1", "cmpA2", "cmpA3", "cmpA4", "cmpA5"];
+
+function comparePayments(p) {
+  const priceMode = !p.cmpLoanMode;
+  const i = monthlyRate(p.cmpRate);
+  const n = Math.max(1, Math.round(p.cmpAmort * 12));
+  const rows = [];
+
+  CMP_SLOTS.forEach((k, idx) => {
+    const amt = p[k];
+    if (!(amt > 0)) return;               // blank slots simply drop out
+    let down = 0, premium = 0, premiumPct = 0, minDown = 0, belowMin = false, loan;
+
+    if (priceMode) {
+      const dp = Math.min(100, Math.max(0, p.cmpDownPct));
+      minDown = minDownPct(amt);
+      belowMin = dp + 1e-9 < minDown;
+      down = (amt * dp) / 100;
+      premiumPct = cmhcPct(dp, p.cmpAmort);
+      const base = Math.max(0, amt - down);
+      premium = (base * premiumPct) / 100;
+      loan = base + premium;
+    } else {
+      loan = amt;
+    }
+
+    const mo = payment(loan, i, n);
+    rows.push({
+      key: k, idx, amt, down, premium, premiumPct, loan, mo,
+      total: mo * n, interest: mo * n - loan,
+      belowMin, minDown, ptt: priceMode ? bcPTT(amt, p.cmpFirstTime) : 0,
+    });
+  });
+
+  return rows;
+}
+
+function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
+  const priceMode = !p.cmpLoanMode;
+  const maxMo = rows.length ? Math.max(...rows.map((r) => r.mo)) : 0;
+  const minMo = rows.length ? Math.min(...rows.map((r) => r.mo)) : 0;
+  const cheapest = rows.find((r) => r.mo === minMo);
+
+  const modeBtn = (id, label) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => set("cmpLoanMode")(id === "loan")}
+      style={{
+        fontFamily: SANS, fontSize: 12,
+        fontWeight: (id === "price") === priceMode ? 600 : 400,
+        color: (id === "price") === priceMode ? C.onBuy : C.mute,
+        background: (id === "price") === priceMode ? C.buy : "transparent",
+        border: "1px solid " + ((id === "price") === priceMode ? C.buy : C.line),
+        borderRadius: 3, padding: "6px 10px", cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="rvb-main">
+      {/* ---- inputs ---- */}
+      <div className="rvb-col">
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>
+            Compare payments
+          </h2>
+          <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 12 }}>
+            Up to five amounts, one set of conditions. Leave a row blank to drop it.
+          </p>
+
+          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+            {modeBtn("price", "Purchase prices")}
+            {modeBtn("loan", "Mortgage amounts")}
+          </div>
+
+          <Group
+            title="The same conditions"
+            note={priceMode
+              ? "Applied to every amount below. CMHC is added automatically under 20% down."
+              : "Applied to every amount below. These are the mortgage figures themselves."}
+          >
+            <Field label="Interest rate" suffix="%" step={0.05}
+                   value={raw.cmpRate} onChange={set("cmpRate")} />
+            <Field label="Amortization" suffix="yr" step={1}
+                   value={raw.cmpAmort} onChange={set("cmpAmort")} />
+            {priceMode && (
+              <Field label="Down payment" suffix="%" step={1}
+                     value={raw.cmpDownPct} onChange={set("cmpDownPct")} />
+            )}
+          </Group>
+
+          {priceMode && (
+            <label className="flex items-center gap-2 cursor-pointer"
+                   style={{ marginTop: -8, marginBottom: 14 }}>
+              <input type="checkbox" checked={!!raw.cmpFirstTime}
+                     onChange={(e) => set("cmpFirstTime")(e.target.checked)} />
+              <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>
+                First-time buyer (affects transfer tax, not the payment)
+              </span>
+            </label>
+          )}
+
+          <Group title={priceMode ? "Purchase prices" : "Mortgage amounts"}>
+            {CMP_SLOTS.map((k, idx) => (
+              <Field key={k} label={"Option " + (idx + 1)} prefix="$" step={25000}
+                     value={raw[k]} onChange={set(k)} />
+            ))}
+          </Group>
+
+          <button
+            type="button"
+            onClick={onCopyConditions}
+            style={{
+              fontFamily: SANS, fontSize: 12, color: C.buy,
+              background: "transparent", border: "1px solid " + C.line,
+              borderRadius: 3, padding: "7px 11px", cursor: "pointer",
+            }}
+          >
+            Use my rent-vs-buy conditions
+          </button>
+        </Panel>
+      </div>
+
+      {/* ---- results ---- */}
+      <div className="rvb-col">
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>
+            Monthly payment
+          </h2>
+          <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14 }}>
+            Principal and interest only — no tax, insurance, strata or upkeep.
+            {priceMode && " Canadian fixed rates compound semi-annually."}
+          </p>
+
+          {rows.length === 0 ? (
+            <div style={{
+              fontFamily: SANS, fontSize: 12.5, color: C.mute,
+              border: "1px dashed " + C.line, borderRadius: 3, padding: 16,
+            }}>
+              Put an amount into at least one option to see a payment.
+            </div>
+          ) : (
+            <>
+              {rows.map((r, n) => {
+                // subtract the rounded figures, so the deltas agree with
+                // the payments as displayed rather than being a dollar out
+                const delta = Math.round(r.mo) - Math.round(minMo);
+                const isLow = r === cheapest;
+                return (
+                  <div key={r.key} style={{
+                    padding: "12px 0",
+                    borderBottom: n === rows.length - 1 ? "none" : "1px solid " + C.line,
+                  }}>
+                    <div className="flex items-baseline justify-between" style={{ gap: 10 }}>
+                      <span style={{ fontFamily: MONO, fontSize: 12.5, color: C.mute }}>
+                        {usd(r.amt)}
+                        {priceMode && (
+                          <span style={{ color: C.mute }}>
+                            {"  →  "}{usd(r.loan)} mortgage
+                          </span>
+                        )}
+                      </span>
+                      <span style={{
+                        fontFamily: MONO, fontSize: 19, fontWeight: 600,
+                        color: isLow ? C.buy : C.ink, whiteSpace: "nowrap",
+                      }}>
+                        {usd(r.mo)}<span style={{ fontSize: 12, color: C.mute }}>/mo</span>
+                      </span>
+                    </div>
+
+                    {/* the bar is the comparison; the numbers are the detail */}
+                    <div style={{
+                      height: 8, borderRadius: 999, background: C.panelAlt,
+                      marginTop: 8, marginBottom: 7, overflow: "hidden",
+                    }}>
+                      <div style={{
+                        width: (maxMo > 0 ? (r.mo / maxMo) * 100 : 0) + "%",
+                        height: "100%", borderRadius: 999,
+                        background: BUY_TINTS[Math.min(n, BUY_TINTS.length - 1)],
+                        transition: "width .35s cubic-bezier(.4,0,.2,1)",
+                      }} />
+                    </div>
+
+                    <div className="flex items-baseline justify-between" style={{ gap: 10 }}>
+                      <span style={{ fontFamily: SANS, fontSize: 11, color: C.mute }}>
+                        {isLow
+                          ? "lowest payment"
+                          : "+" + usd(delta) + "/mo  ·  +" + usd(delta * 12) + "/yr"}
+                      </span>
+                      <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.mute }}>
+                        {usd(r.interest)} interest over {trim(p.cmpAmort)} yr
+                      </span>
+                    </div>
+
+                    {priceMode && r.belowMin && (
+                      <div style={{
+                        fontFamily: SANS, fontSize: 10.5, color: C.signal, marginTop: 5,
+                      }}>
+                        {trim(p.cmpDownPct)}% is under the {trim(r.minDown)}% minimum down
+                        at this price — a lender would not write this one.
+                      </div>
+                    )}
+                    {priceMode && r.premiumPct > 0 && !r.belowMin && (
+                      <div style={{
+                        fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 5,
+                      }}>
+                        includes {trim(r.premiumPct)}% CMHC premium ({usd(r.premium)})
+                        financed into the mortgage
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {rows.length > 1 && (
+                <div style={{
+                  marginTop: 14, padding: "10px 12px", borderRadius: 3,
+                  background: C.panelAlt, fontFamily: SANS, fontSize: 12, color: C.ink,
+                }}>
+                  Cheapest to dearest is{" "}
+                  <b>{usd(Math.round(maxMo) - Math.round(minMo))} a month</b>, or{" "}
+                  <b>{usd((Math.round(maxMo) - Math.round(minMo)) * 12)} a year</b>.
+                </div>
+              )}
+
+              {priceMode && rows.length > 0 && (
+                <div style={{
+                  marginTop: 10, fontFamily: SANS, fontSize: 10.5, color: C.mute,
+                }}>
+                  Transfer tax at these prices:{" "}
+                  {rows.map((r, n) => (
+                    <span key={r.key}>
+                      {n ? " · " : ""}{usd(r.amt)} → {usd(r.ptt)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
  *  Main
  * ------------------------------------------------------------------ */
 const DEFAULTS = {
@@ -1009,6 +1266,17 @@ const DEFAULTS = {
   apprNowYear: 2026,
   apprUseSpan: false,
   apprSpan: 10,
+  // Payment comparison
+  cmpLoanMode: false,
+  cmpRate: 4.24,
+  cmpAmort: 25,
+  cmpDownPct: 20,
+  cmpFirstTime: false,
+  cmpA1: 1200000,
+  cmpA2: 1350000,
+  cmpA3: 1450000,
+  cmpA4: 1600000,
+  cmpA5: "",
 };
 
 
@@ -1027,6 +1295,9 @@ const KEYS = {
   horizonYears: "h",
   apprThen: "at", apprThenYear: "aty", apprNow: "an", apprNowYear: "any",
   apprUseSpan: "aus", apprSpan: "asp",
+  cmpLoanMode: "cl", cmpRate: "cr", cmpAmort: "cq", cmpDownPct: "cw",
+  cmpFirstTime: "cf",
+  cmpA1: "c1", cmpA2: "c2", cmpA3: "c3", cmpA4: "c4", cmpA5: "c5",
 };
 const CODE_TO_KEY = Object.fromEntries(Object.entries(KEYS).map(([k, v]) => [v, k]));
 
@@ -1119,6 +1390,7 @@ export default function RentVsBuy() {
 
   const set = (k) => (v) => setRaw((s) => ({ ...s, [k]: v }));
   const r = useMemo(() => simulate(p), [p]);
+  const cmpRows = useMemo(() => comparePayments(p), [p]);
 
   // Appreciation tool
   const appr = useMemo(() => {
@@ -1304,6 +1576,7 @@ export default function RentVsBuy() {
           {[
             ["buy", "Rent vs. buy"],
             ["appreciation", "Appreciation calculator"],
+            ["payments", "Payment comparison"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -1357,7 +1630,23 @@ export default function RentVsBuy() {
           </button>
         </div>
 
-        {tab === "appreciation" ? (
+        {tab === "payments" ? (
+          <PaymentsTab
+            raw={raw}
+            set={set}
+            p={p}
+            rows={cmpRows}
+            onCopyConditions={() => {
+              setRaw((s) => ({
+                ...s,
+                cmpRate: s.rate,
+                cmpAmort: s.amortYears,
+                cmpDownPct: s.downPct,
+                cmpFirstTime: s.firstTime,
+              }));
+            }}
+          />
+        ) : tab === "appreciation" ? (
           <AppreciationTab
             raw={raw}
             set={set}

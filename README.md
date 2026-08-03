@@ -1,6 +1,12 @@
 # Rent vs Buy — British Columbia
 
-A self-contained rent-versus-buy calculator for British Columbia, with a compound-growth calculator alongside it. No backend, no accounts, no analytics — every calculation runs in your browser, and nothing you type ever leaves the device.
+A self-contained rent-versus-buy calculator for British Columbia. Three tabs:
+
+- **Rent vs. buy** — net worth either way over your horizon, after costs and taxes
+- **Appreciation calculator** — compound growth between two values
+- **Payment comparison** — up to five prices or mortgage amounts against one set of conditions, side by side
+
+No backend, no accounts, no analytics — every calculation runs in your browser, and nothing you type ever leaves the device.
 
 Installs as an app on a phone and a laptop, works with no signal once installed, and every set of inputs is a shareable link.
 
@@ -120,6 +126,8 @@ fs.writeFileSync('src/static/icons.b64.json',JSON.stringify(out,null,0));})();
 ### The model
 
 `simulate()` in `src/App.jsx` is the entire calculation. The BC-specific rules sit just above it as separate functions: `bcPTT`, `cmhcPct`, `minDownPct`, `homeOwnerGrant`, and `monthlyRate` for semi-annual compounding.
+
+`comparePayments()` drives the payment-comparison tab off the same rules, so a price there gets the same minimum-down check and CMHC premium it would get on the first tab.
 
 If you add an input, give it a short code in the `KEYS` map so it survives in shared links. Only values that differ from the defaults get written to the URL, so old links keep working when new inputs appear.
 
