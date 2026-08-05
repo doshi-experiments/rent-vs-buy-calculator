@@ -249,12 +249,20 @@ function simulate(p) {
   let balance = loan;
   let homeValue = price;
 
+  // Investments carried through the purchase rather than spent on it. Seeded
+  // on BOTH sides — the household keeps them whichever way it goes — so it
+  // cancels out of the buy-vs-rent spread. It exists so that a renovation has
+  // somewhere real to be drawn from; without it buyPort starts empty, because
+  // by construction the buyer has just spent everything on closing.
+  const keep = Math.max(0, p.keepInvested || 0);
+  const keepBasis = keep * (1 - gainFrac);
+
   // The renter never liquidates, so their money keeps its original character
-  let rentPort = grossSale + cashUse; // taxable: shares stay unsold, cash gets invested
-  let rentBasis = grossSale * (1 - gainFrac) + cashUse;
+  let rentPort = grossSale + cashUse + keep; // taxable: shares stay unsold, cash gets invested
+  let rentBasis = grossSale * (1 - gainFrac) + cashUse + keepBasis;
   let rentReg = fhsaUse + hbpUse; // registered: RRSP, plus an FHSA that rolls into one
-  let buyPort = 0;
-  let buyBasis = 0;
+  let buyPort = keep;
+  let buyBasis = keepBasis;
   let buyReg = 0; // the buyer's RRSP, rebuilt by HBP repayments
   let totHbpRepaid = 0;
   let totHbpTax = 0;
@@ -267,7 +275,9 @@ function simulate(p) {
     totMaint = 0,
     totPropTax = 0,
     totSuite = 0,
-    totRemodel = 0;
+    totRemodel = 0,
+    totRemodelFromPort = 0,
+    totRemodelTax = 0;
   let payoffMonth = null;
   let y1Buy = null;
   let y1Rent = null;
@@ -312,7 +322,29 @@ function simulate(p) {
     const ins = (p.insYr / 12) * infl;
     const util = (p.utilYr / 12) * infl;
     const strata = p.strataMo * infl;
-    const remodel = m <= remodelMonths ? remodelMo : 0;
+    // Renovation money. Drawn from the taxable portfolio when asked for, which
+    // both realises the gain and stops that money compounding — the real cost
+    // of paying for a kitchen out of investments. Whatever the portfolio
+    // cannot cover falls back to coming out of pocket, so the model degrades
+    // instead of pretending the money was there.
+    let remodel = m <= remodelMonths ? remodelMo : 0;
+    if (remodel > 0 && p.remodelFromPortfolio && buyPort > 0) {
+      const grossDraw = remodel / (1 - effSaleRate);
+      if (buyPort >= grossDraw) {
+        buyPort -= grossDraw;
+        buyBasis = Math.max(0, buyBasis - grossDraw * (1 - gainFrac));
+        totRemodelTax += grossDraw - remodel;
+        totRemodelFromPort += remodel;
+        remodel = 0;
+      } else {
+        const netFromPort = buyPort * (1 - effSaleRate);
+        buyBasis = Math.max(0, buyBasis - buyPort * (1 - gainFrac));
+        totRemodelTax += buyPort - netFromPort;
+        totRemodelFromPort += netFromPort;
+        buyPort = 0;
+        remodel -= netFromPort;
+      }
+    }
     if (m <= remodelMonths) homeValue += remodelValueMo;
     const gross = pi + propTax + maint + ins + util + strata + remodel;
 
@@ -488,6 +520,8 @@ function simulate(p) {
     buyTaxableEnd: afterTax(buyPort, buyBasis),
     rentTaxableEnd: afterTax(rentPort, rentBasis),
     breakPenalty: penaltyAt(months),
+    totRemodelFromPort,
+    totRemodelTax,
     cashToClose: down + closing,
     minDown: (price * minDownPct(price)) / 100,
     belowMin: downPct < minDownPct(price) - 0.001,
@@ -1212,6 +1246,268 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Two-property comparison
+ *
+ *  Runs the whole model twice and compares the two `advantage` figures —
+ *  each property's net worth against the SAME renting alternative.
+ *
+ *  Comparing the two `buy` figures directly would be wrong: when a place
+ *  costs more per month than renting, that surplus lands in the renter's
+ *  portfolio, not the buyer's. Both properties will cost more than rent,
+ *  so both end with an empty buyer portfolio, and the difference in what
+ *  they cost each month would vanish from the answer entirely. Measuring
+ *  each against a common rent baseline keeps that difference in view —
+ *  which is why the rent inputs are shared and not per-property.
+ * ------------------------------------------------------------------ */
+const CP_FIELDS = [
+  ["Price", "Purchase price", "$", null, 25000],
+  ["Down", "Down payment", null, "%", 1],
+  ["Appr", "Appreciation", null, "%/yr", 0.25],
+  ["PropTax", "Property tax", null, "%/yr", 0.01],
+  ["Maint", "Maintenance", "$", "/yr", 500],
+  ["Strata", "Strata fee", "$", "/mo", 25],
+  ["Suite", "Suite rent", "$", "/mo", 100],
+  ["Remodel", "Remodelling", "$", null, 5000],
+  ["RemodelYears", "Spread over", null, "yr", 1],
+  ["RemodelRec", "Value recovered", null, "%", 5],
+];
+
+function compareProps(p, side) {
+  const g = (n) => p["cp" + side + n];
+  return {
+    ...p,
+    homePrice: g("Price"),
+    downPct: g("Down"),
+    apprPct: g("Appr"),
+    propTaxPct: g("PropTax"),
+    maintYr: g("Maint"),
+    strataMo: g("Strata"),
+    suiteRentMo: g("Suite"),
+    remodelCost: g("Remodel"),
+    remodelYears: g("RemodelYears"),
+    remodelRecoveryPct: g("RemodelRec"),
+    keepInvested: p.cpKeep,
+    remodelFromPortfolio: true,
+  };
+}
+
+function CompareTab({ raw, set, p, cmp, onLoadA }) {
+  const { a, b, pa, pb } = cmp;
+  // Round before subtracting so the gap agrees with the figures on screen
+  const advA = Math.round(a.advantage);
+  const advB = Math.round(b.advantage);
+  const gap = advA - advB;
+  const winner = gap === 0 ? null : gap > 0 ? "A" : "B";
+  const apprDiffers = pa.apprPct !== pb.apprPct;
+
+  const mo = (r, s) => {
+    const y = r.y1Buy || {};
+    return y[s] || 0;
+  };
+  // Values stay numeric so the difference column can be derived rather than
+  // parsed back out of formatted strings
+  const perMo = (v) => usd(v) + "/mo";
+  const rows = [
+    ["Purchase price", pa.homePrice, pb.homePrice, usd, true],
+    ["Cash to close", a.cashToClose, b.cashToClose, usd],
+    ["Mortgage", a.loan, b.loan, usd],
+    ["Payment (P&I)", a.payment, b.payment, perMo],
+    ["Property tax", mo(a, "propTax"), mo(b, "propTax"), perMo],
+    ["Maintenance", mo(a, "maint"), mo(b, "maint"), perMo],
+    ["Strata", mo(a, "strata"), mo(b, "strata"), perMo, false, true],
+    ["Suite, after tax", -mo(a, "suite"), -mo(b, "suite"), perMo, false, true],
+    ["Net cost, year 1", mo(a, "total"), mo(b, "total"), perMo, true],
+  ];
+  const signed = (v, fmt) =>
+    Math.abs(v) < 0.5 ? "—" : (v > 0 ? "+" : "") + fmt(v);
+  const cell = (v, tone, strong) => (
+    <span style={{
+      fontFamily: MONO, fontSize: 12.5, textAlign: "right",
+      color: tone || C.ink, fontWeight: strong ? 600 : 400, whiteSpace: "nowrap",
+    }}>{v}</span>
+  );
+
+  return (
+    <>
+      {/* ---- the verdict ---- */}
+      <Panel className="mb-5">
+        {winner === null ? (
+          <h1 style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15 }}>
+            Both properties land in the same place.
+          </h1>
+        ) : (
+          <h1 style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15 }}>
+            Property {winner} leaves you{" "}
+            <span style={{
+              color: C.buy, borderBottom: "2px solid " + C.buySoft, paddingBottom: 1,
+            }}>{usd(Math.abs(gap))}</span>{" "}
+            better off after {trim(p.horizonYears)} years.
+          </h1>
+        )}
+        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 10, maxWidth: 760 }}>
+          Each property is measured against the same renting alternative, then
+          the two are compared. That keeps the difference in what they cost
+          every month in the answer — it would otherwise disappear, since money
+          not spent on a house is money invested either way.
+        </p>
+
+        <div className="rvb-pair mt-4">
+          {[["A", a, advA], ["B", b, advB]].map(([id, r, adv]) => (
+            <div key={id} style={{
+              border: "1px solid " + (winner === id ? C.buy : C.line),
+              borderRadius: 3, padding: "12px 14px",
+              background: winner === id ? C.panelAlt : "transparent",
+            }}>
+              <div style={{ fontFamily: SANS, fontSize: 11, color: C.mute, letterSpacing: ".04em" }}>
+                PROPERTY {id} · {usd(id === "A" ? pa.homePrice : pb.homePrice)}
+              </div>
+              <div style={{
+                fontFamily: MONO, fontSize: 22, fontWeight: 600, marginTop: 4,
+                color: adv >= 0 ? C.buy : C.rent,
+              }}>
+                {adv >= 0 ? "+" : "−"}{usd(Math.abs(adv))}
+              </div>
+              <div style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginTop: 2 }}>
+                {adv >= 0 ? "ahead of renting" : "behind renting"} at year {trim(p.horizonYears)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {apprDiffers && (
+          <div style={{
+            marginTop: 14, padding: "9px 12px", borderRadius: 3,
+            background: C.rentWash, fontFamily: SANS, fontSize: 11.5, color: C.ink,
+          }}>
+            These properties are set to appreciate at different rates
+            ({trim(pa.apprPct)}% vs {trim(pb.apprPct)}%). Over{" "}
+            {trim(p.horizonYears)} years that gap drives the result more than
+            anything else on this page — worth being sure you believe it.
+          </div>
+        )}
+      </Panel>
+
+      {/* ---- the one shared input this tab adds ---- */}
+      <Panel className="mb-5">
+        <div className="rvb-fields">
+          <Field label="Investments kept after closing" prefix="$" step={10000}
+                 value={raw.cpKeep} onChange={set("cpKeep")}
+                 hint="What renovations are drawn from, before they fall back to cash" />
+        </div>
+        <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 8, maxWidth: 760 }}>
+          Held on to through the purchase rather than spent on it, and counted
+          the same way whether you buy or rent — so it does not tilt the
+          comparison. Renovation money comes out of here, which realises the
+          capital gain and stops that money compounding.
+        </p>
+      </Panel>
+
+      {/* ---- inputs ---- */}
+      <div className="rvb-pair mb-5">
+        {["A", "B"].map((id) => (
+          <Panel key={id}>
+            <div className="flex items-center justify-between mb-1">
+              <h2 style={{ fontFamily: SERIF, fontSize: 20 }}>Property {id}</h2>
+              {id === "A" && (
+                <button type="button" onClick={onLoadA}
+                  style={{
+                    fontFamily: SANS, fontSize: 11, color: C.buy,
+                    background: "transparent", border: "1px solid " + C.line,
+                    borderRadius: 3, padding: "5px 9px", cursor: "pointer",
+                  }}>
+                  Load my rent-vs-buy scenario
+                </button>
+              )}
+            </div>
+            <div className="rvb-fields mt-3">
+              {CP_FIELDS.map(([k, label, prefix, suffix, step]) => (
+                <Field key={k} label={label} prefix={prefix} suffix={suffix} step={step}
+                       value={raw["cp" + id + k]} onChange={set("cp" + id + k)} />
+              ))}
+            </div>
+          </Panel>
+        ))}
+      </div>
+
+      {/* ---- side by side ---- */}
+      <Panel>
+        <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>Side by side</h2>
+        <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14 }}>
+          Monthly figures are year one. Everything else on this page — rate,
+          amortisation, taxes, the rent being compared against — is shared, and
+          lives on the first tab.
+        </p>
+
+        <div className="rvb-cmp">
+          <span />
+          {cell("Property A", C.mute)}
+          {cell("Property B", C.mute)}
+          {cell("Difference", C.mute)}
+          {rows.map(([label, av, bv, fmt, strong, dashZero]) => {
+            const txt = (v) => (dashZero && Math.abs(v) < 0.5 ? "—" : fmt(v));
+            const box = { padding: "6px 0", borderTop: "1px dotted " + C.line, textAlign: "right" };
+            return (
+              <React.Fragment key={label}>
+                <span style={{
+                  fontFamily: SANS, fontSize: 12.5, padding: "6px 0",
+                  color: strong ? C.ink : C.mute,
+                  fontWeight: strong ? 600 : 400,
+                  borderTop: "1px dotted " + C.line,
+                }}>{label}</span>
+                <span style={box}>{cell(txt(av), null, strong)}</span>
+                <span style={box}>{cell(txt(bv), null, strong)}</span>
+                <span className="cmp-d" style={box}>
+                  {/* rounded before subtracting, so the column agrees with
+                      the two beside it rather than landing a dollar out */}
+                  {cell(signed(Math.round(av) - Math.round(bv), fmt), C.mute, strong)}
+                </span>
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        <div style={{ borderTop: "1px solid " + C.line, marginTop: 14, paddingTop: 12 }}>
+          <Eyebrow>Over {trim(p.horizonYears)} years</Eyebrow>
+          <div className="mt-2">
+            <Row label="Home value at the horizon"
+                 value={usd(a.years.length ? a.years[a.years.length - 1].homeValue : 0)
+                        + "  ·  " + usd(b.years.length ? b.years[b.years.length - 1].homeValue : 0)} />
+            <Row label="Mortgage still owing"
+                 value={usd(a.years.length ? a.years[a.years.length - 1].balance : 0)
+                        + "  ·  " + usd(b.years.length ? b.years[b.years.length - 1].balance : 0)} />
+            {(a.totRemodelFromPort > 0.5 || b.totRemodelFromPort > 0.5) && (
+              <>
+                <Row label="Remodelling drawn from investments"
+                     value={usd(a.totRemodelFromPort) + "  ·  " + usd(b.totRemodelFromPort)}
+                     tone={C.rent} />
+                <Row label="Capital gains tax realised doing so"
+                     value={usd(a.totRemodelTax) + "  ·  " + usd(b.totRemodelTax)}
+                     tone={C.rent} />
+              </>
+            )}
+            {(a.totRemodel > 0.5 || b.totRemodel > 0.5) && (
+              <Row label="Remodelling that fell back to cash"
+                   value={usd(a.totRemodel) + "  ·  " + usd(b.totRemodel)}
+                   tone={C.signal} />
+            )}
+            <Row label="Ahead of renting" strong
+                 value={usd(advA) + "  ·  " + usd(advB)}
+                 tone={C.buy} />
+          </div>
+          {(a.totRemodel > 0.5 || b.totRemodel > 0.5) && (
+            <div style={{ fontFamily: SANS, fontSize: 11, color: C.signal, marginTop: 8 }}>
+              The renovation ran past what the kept investments could cover, so
+              the remainder is being paid out of pocket. Raise “investments kept
+              after closing” if that is not what you meant.
+            </div>
+          )}
+        </div>
+      </Panel>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
  *  Main
  * ------------------------------------------------------------------ */
 const DEFAULTS = {
@@ -1277,6 +1573,16 @@ const DEFAULTS = {
   cmpA3: 1450000,
   cmpA4: 1600000,
   cmpA5: "",
+  // Two-property comparison. Defaults sketch the usual trade-off: a dearer
+  // detached place with a suite, against a cheaper one carrying strata that
+  // needs work done to it.
+  cpKeep: 150000,
+  cpAPrice: 1450000, cpADown: 20, cpAAppr: 3, cpAPropTax: 0.36,
+  cpAMaint: 6000, cpAStrata: 0, cpASuite: 1900,
+  cpARemodel: 0, cpARemodelYears: 2, cpARemodelRec: 50,
+  cpBPrice: 1250000, cpBDown: 20, cpBAppr: 3, cpBPropTax: 0.36,
+  cpBMaint: 4000, cpBStrata: 350, cpBSuite: 0,
+  cpBRemodel: 60000, cpBRemodelYears: 1, cpBRemodelRec: 50,
 };
 
 
@@ -1298,6 +1604,14 @@ const KEYS = {
   cmpLoanMode: "cl", cmpRate: "cr", cmpAmort: "cq", cmpDownPct: "cw",
   cmpFirstTime: "cf",
   cmpA1: "c1", cmpA2: "c2", cmpA3: "c3", cmpA4: "c4", cmpA5: "c5",
+  // Digit-first codes: every code above is alpha-led, so these cannot collide.
+  cpKeep: "0k",
+  cpAPrice: "1p", cpADown: "1d", cpAAppr: "1a", cpAPropTax: "1t",
+  cpAMaint: "1m", cpAStrata: "1s", cpASuite: "1u",
+  cpARemodel: "1r", cpARemodelYears: "1y", cpARemodelRec: "1v",
+  cpBPrice: "2p", cpBDown: "2d", cpBAppr: "2a", cpBPropTax: "2t",
+  cpBMaint: "2m", cpBStrata: "2s", cpBSuite: "2u",
+  cpBRemodel: "2r", cpBRemodelYears: "2y", cpBRemodelRec: "2v",
 };
 const CODE_TO_KEY = Object.fromEntries(Object.entries(KEYS).map(([k, v]) => [v, k]));
 
@@ -1391,6 +1705,10 @@ export default function RentVsBuy() {
   const set = (k) => (v) => setRaw((s) => ({ ...s, [k]: v }));
   const r = useMemo(() => simulate(p), [p]);
   const cmpRows = useMemo(() => comparePayments(p), [p]);
+  const cmp = useMemo(() => {
+    const pa = compareProps(p, "A"), pb = compareProps(p, "B");
+    return { a: simulate(pa), b: simulate(pb), pa, pb };
+  }, [p]);
 
   // Appreciation tool
   const appr = useMemo(() => {
@@ -1548,6 +1866,13 @@ export default function RentVsBuy() {
     .rvb-pair-wide { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
     @media (min-width: 1500px) { .rvb-pair-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+    /* Side-by-side comparison; the difference column is the first to go */
+    .rvb-cmp { display: grid; grid-template-columns: 1fr auto auto auto; column-gap: 16px; }
+    @media (max-width: 760px) {
+      .rvb-cmp { grid-template-columns: 1fr auto auto; }
+      .rvb-cmp .cmp-d { display: none; }
+    }
+
     /* Tablet: the inputs span the full width, so fit more fields per row */
     .rvb-fields { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     @media (min-width: 640px) and (max-width: 1023px) {
@@ -1577,6 +1902,7 @@ export default function RentVsBuy() {
             ["buy", "Rent vs. buy"],
             ["appreciation", "Appreciation calculator"],
             ["payments", "Payment comparison"],
+            ["compare", "Two properties"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -1630,7 +1956,23 @@ export default function RentVsBuy() {
           </button>
         </div>
 
-        {tab === "payments" ? (
+        {tab === "compare" ? (
+          <CompareTab
+            raw={raw}
+            set={set}
+            p={p}
+            cmp={cmp}
+            onLoadA={() => {
+              setRaw((s) => ({
+                ...s,
+                cpAPrice: s.homePrice, cpADown: s.downPct, cpAAppr: s.apprPct,
+                cpAPropTax: s.propTaxPct, cpAMaint: s.maintYr, cpAStrata: s.strataMo,
+                cpASuite: s.suiteRentMo, cpARemodel: s.remodelCost,
+                cpARemodelYears: s.remodelYears, cpARemodelRec: s.remodelRecoveryPct,
+              }));
+            }}
+          />
+        ) : tab === "payments" ? (
           <PaymentsTab
             raw={raw}
             set={set}

@@ -5,6 +5,7 @@ A self-contained rent-versus-buy calculator for British Columbia. Three tabs:
 - **Rent vs. buy** — net worth either way over your horizon, after costs and taxes
 - **Appreciation calculator** — compound growth between two values
 - **Payment comparison** — up to five prices or mortgage amounts against one set of conditions, side by side
+- **Two properties** — two homes compared in full, including suite income and renovations
 
 No backend, no accounts, no analytics — every calculation runs in your browser, and nothing you type ever leaves the device.
 
@@ -128,6 +129,10 @@ fs.writeFileSync('src/static/icons.b64.json',JSON.stringify(out,null,0));})();
 `simulate()` in `src/App.jsx` is the entire calculation. The BC-specific rules sit just above it as separate functions: `bcPTT`, `cmhcPct`, `minDownPct`, `homeOwnerGrant`, and `monthlyRate` for semi-annual compounding.
 
 `comparePayments()` drives the payment-comparison tab off the same rules, so a price there gets the same minimum-down check and CMHC premium it would get on the first tab.
+
+The two-property tab runs `simulate()` twice and compares the two `advantage` figures — each property measured against the **same** renting alternative. Comparing the two `buy` figures directly would be wrong: when a home costs more per month than renting, that surplus accrues to the renter's portfolio, so two homes that both cost more than rent would both end with an empty buyer portfolio and the monthly difference between them would vanish from the result. This is why the rent inputs are shared rather than per-property.
+
+Two optional parameters exist for that tab and default to off, leaving the other tabs unchanged: `keepInvested` seeds both sides' portfolios with investments carried through the purchase (it cancels out of the spread, and gives renovations something to draw from), and `remodelFromPortfolio` withdraws renovation money from the buyer's taxable holdings — realising the gain and forgoing the compounding — instead of treating it as monthly cash outflow.
 
 If you add an input, give it a short code in the `KEYS` map so it survives in shared links. Only values that differ from the defaults get written to the URL, so old links keep working when new inputs appear.
 
