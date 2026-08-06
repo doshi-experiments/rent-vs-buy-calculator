@@ -132,7 +132,9 @@ fs.writeFileSync('src/static/icons.b64.json',JSON.stringify(out,null,0));})();
 
 The two-property tab runs `simulate()` twice and compares the two `advantage` figures — each property measured against the **same** renting alternative. Comparing the two `buy` figures directly would be wrong: when a home costs more per month than renting, that surplus accrues to the renter's portfolio, so two homes that both cost more than rent would both end with an empty buyer portfolio and the monthly difference between them would vanish from the result. This is why the rent inputs are shared rather than per-property.
 
-Two optional parameters exist for that tab and default to off, leaving the other tabs unchanged: `keepInvested` seeds both sides' portfolios with investments carried through the purchase (it cancels out of the spread, and gives renovations something to draw from), and `remodelFromPortfolio` withdraws renovation money from the buyer's taxable holdings — realising the gain and forgoing the compounding — instead of treating it as monthly cash outflow.
+The tab's funding model is one pot: **total available cash**. Each property takes its down payment, transfer tax and legal costs out of the pot on day one; the remainder is invested, and the renting alternative invests the whole pot. Renovations are then drawn from the leftover as the work happens — taxed only on gains accrued by each draw, since sales consume basis pro rata — or ride a line of credit at a settable rate, leaving the investments untouched. If the pot doesn't cover closing, the tab says so rather than silently pretending.
+
+Under the hood these are optional `simulate()` parameters (`keepInvested`, `remodelFromPortfolio`, `remodelFromLOC`, `locRatePct`) that default to off, so the other tabs are unchanged.
 
 If you add an input, give it a short code in the `KEYS` map so it survives in shared links. Only values that differ from the defaults get written to the URL, so old links keep working when new inputs appear. The open tab travels in the URL too, as `tab=` — handled outside the `KEYS` map, and ignored by parsers that don't know it.
 

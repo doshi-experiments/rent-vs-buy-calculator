@@ -342,19 +342,26 @@ function simulate(p) {
       locBal += remodel;
       remodel = 0;
     } else if (remodel > 0 && p.remodelFromPortfolio && buyPort > 0) {
-      const grossDraw = remodel / (1 - effSaleRate);
+      // Sell enough to net the month's bill, taxing only the gain actually
+      // embedded in the portfolio right now — sales consume basis pro rata,
+      // so a pot of fresh cash draws nearly tax-free at first and pays more
+      // as its gains accrue. (The old flat t=0 rate overtaxed cash pots.)
+      const basisFrac = Math.min(1, buyBasis / buyPort);
+      const drawRate = Math.min(0.95, (1 - basisFrac) * (p.capGainsPct / 100));
+      const grossDraw = remodel / (1 - drawRate);
       if (buyPort >= grossDraw) {
         buyPort -= grossDraw;
-        buyBasis = Math.max(0, buyBasis - grossDraw * (1 - gainFrac));
+        buyBasis = Math.max(0, buyBasis - grossDraw * basisFrac);
         totRemodelTax += grossDraw - remodel;
         totRemodelFromPort += remodel;
         remodel = 0;
       } else {
-        const netFromPort = buyPort * (1 - effSaleRate);
-        buyBasis = Math.max(0, buyBasis - buyPort * (1 - gainFrac));
-        totRemodelTax += buyPort - netFromPort;
+        const tax = Math.max(0, buyPort - buyBasis) * (p.capGainsPct / 100);
+        const netFromPort = buyPort - tax;
+        totRemodelTax += tax;
         totRemodelFromPort += netFromPort;
         buyPort = 0;
+        buyBasis = 0;
         remodel -= netFromPort;
       }
     }
@@ -1291,10 +1298,24 @@ const CP_FIELDS = [
 ];
 
 function compareProps(p, side) {
+  // One pot of cash, whole household. Each property takes its down payment
+  // and closing costs out of the pot on day one; whatever is left goes into
+  // the market as the buyer's portfolio, and the renting alternative simply
+  // invests the entire pot. A cheaper property therefore starts its owner
+  // with more money working — which is most of what "affordable" means.
+  //
+  // The pot is cash, so its basis is itself: taxableGainPct is zeroed and
+  // the t=0 brokerage machinery is bypassed. Renovations then draw from the
+  // leftover (or ride the line of credit), taxed only on gains that have
+  // actually accrued by the time of each draw.
   const g = (n) => p["cp" + side + n];
+  const price = g("Price");
+  const down = (price * Math.min(100, Math.max(0, g("Down")))) / 100;
+  const closeCost = down + bcPTT(price, p.firstTime) + p.legalFees;
+  const cash = Math.max(0, p.cpCash);
   return {
     ...p,
-    homePrice: g("Price"),
+    homePrice: price,
     downPct: g("Down"),
     apprPct: g("Appr"),
     propTaxPct: g("PropTax"),
@@ -1304,7 +1325,13 @@ function compareProps(p, side) {
     remodelCost: g("Remodel"),
     remodelYears: g("RemodelYears"),
     remodelRecoveryPct: g("RemodelRec"),
-    keepInvested: p.cpKeep,
+    cashSavings: cash,
+    fhsaUse: 0,
+    hbpUse: 0,
+    taxableUse: 0,
+    autoBrokerage: false,
+    taxableGainPct: 0,
+    keepInvested: Math.max(0, cash - closeCost),
     remodelFromPortfolio: !p.cpRemodelLOC,
     remodelFromLOC: !!p.cpRemodelLOC,
     locRatePct: p.cpLOCRate,
@@ -1331,6 +1358,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
   const rows = [
     ["Purchase price", pa.homePrice, pb.homePrice, usd, true],
     ["Cash to close", a.cashToClose, b.cashToClose, usd],
+    ["Left invested, day one", pa.keepInvested, pb.keepInvested, usd],
     ["Mortgage", a.loan, b.loan, usd],
     ["Payment (P&I)", a.payment, b.payment, perMo],
     ["Property tax", mo(a, "propTax"), mo(b, "propTax"), perMo],
@@ -1392,9 +1420,49 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
               <div style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginTop: 2 }}>
                 {adv >= 0 ? "ahead of renting" : "behind renting"} at year {trim(p.horizonYears)}
               </div>
+              <div style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginTop: 5,
+                            borderTop: "1px dotted " + C.line, paddingTop: 5 }}>
+                starts with <b style={{ color: C.ink, fontWeight: 600 }}>
+                {usd((id === "A" ? pa : pb).keepInvested)}</b> still invested
+              </div>
             </div>
           ))}
         </div>
+
+        {/* scrub the horizon and watch the verdict move */}
+        <div style={{ marginTop: 16, borderTop: "1px solid " + C.line, paddingTop: 14 }}>
+          <SliderRow label="Time period" value={p.horizonYears}
+                     onChange={set("horizonYears")}
+                     min={1} max={30} step={1} suffix="yr" accent={C.buy} />
+        </div>
+
+        {(a.shortfall > 0.5 || b.shortfall > 0.5) && (
+          <div style={{
+            marginTop: 14, padding: "9px 12px", borderRadius: 3,
+            background: C.rentWash, fontFamily: SANS, fontSize: 11.5, color: C.rent,
+          }}>
+            Your cash does not cover the down payment and closing on{" "}
+            {a.shortfall > 0.5 && b.shortfall > 0.5 ? "either property"
+              : a.shortfall > 0.5 ? "Property A" : "Property B"}
+            {" — short "}
+            {a.shortfall > 0.5 && b.shortfall > 0.5
+              ? usd(a.shortfall) + " and " + usd(b.shortfall)
+              : usd(Math.max(a.shortfall, b.shortfall))}
+            . The model pretends the gap is funded, so treat those numbers as
+            optimistic.
+          </div>
+        )}
+        {(a.belowMin || b.belowMin) && (
+          <div style={{
+            marginTop: 10, padding: "9px 12px", borderRadius: 3,
+            background: C.panelAlt, fontFamily: SANS, fontSize: 11.5, color: C.signal,
+          }}>
+            The down payment on{" "}
+            {a.belowMin && b.belowMin ? "both properties is" :
+             a.belowMin ? "Property A is" : "Property B is"} below BC's minimum
+            for the price — a lender would not write that mortgage.
+          </div>
+        )}
 
         {apprDiffers && (
           <div style={{
@@ -1431,10 +1499,9 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
           ))}
         </div>
         <div className="rvb-fields">
-          <Field label="Investments kept after closing" prefix="$" step={10000}
-                 value={raw.cpKeep} onChange={set("cpKeep")}
-                 hint={locMode ? "Compounds untouched on both sides"
-                               : "What renovations are drawn from, before they fall back to cash"} />
+          <Field label="Total available cash" prefix="$" step={25000}
+                 value={raw.cpCash} onChange={set("cpCash")}
+                 hint="Down payment, transfer tax and legal come out of this; the rest is invested" />
           {locMode && (
             <Field label="Line of credit rate" suffix="%" step={0.25}
                    value={raw.cpLOCRate} onChange={set("cpLOCRate")}
@@ -1443,14 +1510,15 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
         </div>
         <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 8, maxWidth: 760 }}>
           {locMode
-            ? "Renovation draws pile onto the line of credit as the work happens. " +
-              "The interest-only minimum comes out of cash flow each month, and " +
-              "whatever is still owing at the horizon comes off the sale. The " +
-              "investments above stay untouched and keep compounding on both sides."
-            : "Held on to through the purchase rather than spent on it, and counted " +
-              "the same way whether you buy or rent — so it does not tilt the " +
-              "comparison. Renovation money comes out of here, which realises the " +
-              "capital gain and stops that money compounding."}
+            ? "Each property takes its closing costs out of this pot on day one and " +
+              "the rest goes straight into the market. Renovations ride the line of " +
+              "credit instead of touching those investments: the interest-only " +
+              "minimum comes out of cash flow monthly, and the balance comes off " +
+              "the sale at the horizon. The renting alternative invests the whole pot."
+            : "Each property takes its closing costs out of this pot on day one and " +
+              "the rest goes straight into the market. Renovations are then drawn " +
+              "from those investments as the work happens, taxed only on the gains " +
+              "accrued by then. The renting alternative invests the whole pot."}
         </p>
       </Panel>
 
@@ -1558,9 +1626,9 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
           </div>
           {(a.totRemodel > 0.5 || b.totRemodel > 0.5) && (
             <div style={{ fontFamily: SANS, fontSize: 11, color: C.signal, marginTop: 8 }}>
-              The renovation ran past what the kept investments could cover, so
-              the remainder is being paid out of pocket. Raise “investments kept
-              after closing” if that is not what you meant.
+              The renovation ran past what was left invested after closing, so
+              the remainder is being paid out of pocket. Raise your total
+              available cash if that is not what you meant.
             </div>
           )}
         </div>
@@ -1638,7 +1706,7 @@ const DEFAULTS = {
   // Two-property comparison. Defaults sketch the usual trade-off: a dearer
   // detached place with a suite, against a cheaper one carrying strata that
   // needs work done to it.
-  cpKeep: 150000,
+  cpCash: 500000,
   cpRemodelLOC: false,
   cpLOCRate: 6.5,
   cpAPrice: 1450000, cpADown: 20, cpAAppr: 3, cpAPropTax: 0.36,
@@ -1669,7 +1737,7 @@ const KEYS = {
   cmpFirstTime: "cf",
   cmpA1: "c1", cmpA2: "c2", cmpA3: "c3", cmpA4: "c4", cmpA5: "c5",
   // Digit-first codes: every code above is alpha-led, so these cannot collide.
-  cpKeep: "0k", cpRemodelLOC: "0l", cpLOCRate: "0c",
+  cpCash: "0h", cpRemodelLOC: "0l", cpLOCRate: "0c",
   cpAPrice: "1p", cpADown: "1d", cpAAppr: "1a", cpAPropTax: "1t",
   cpAMaint: "1m", cpAStrata: "1s", cpASuite: "1u",
   cpARemodel: "1r", cpARemodelYears: "1y", cpARemodelRec: "1v",
