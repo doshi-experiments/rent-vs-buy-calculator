@@ -277,7 +277,14 @@ function simulate(p) {
     totSuite = 0,
     totRemodel = 0,
     totRemodelFromPort = 0,
-    totRemodelTax = 0;
+    totRemodelTax = 0,
+    totLOCInterest = 0;
+  // Renovation on a line of credit: draws pile onto the balance, the
+  // interest-only minimum is paid from cash flow each month, and whatever
+  // is still owing comes off the sale price at the horizon. HELOCs price
+  // monthly, not semi-annually like the mortgage, so /12 is the honest rate.
+  let locBal = 0;
+  const locMoRate = (p.locRatePct || 0) / 100 / 12;
   let payoffMonth = null;
   let y1Buy = null;
   let y1Rent = null;
@@ -288,6 +295,7 @@ function simulate(p) {
   const netBuy = (mIdx) =>
     homeValue * (1 - p.sellCostPct / 100) -
     balance -
+    locBal -
     penaltyAt(mIdx) +
     afterTax(buyPort, buyBasis) +
     buyReg * (1 - marg);
@@ -328,7 +336,12 @@ function simulate(p) {
     // cannot cover falls back to coming out of pocket, so the model degrades
     // instead of pretending the money was there.
     let remodel = m <= remodelMonths ? remodelMo : 0;
-    if (remodel > 0 && p.remodelFromPortfolio && buyPort > 0) {
+    if (remodel > 0 && p.remodelFromLOC) {
+      // Nothing leaves the pocket this month — the balance grows instead,
+      // and the interest below starts compounding against the decision.
+      locBal += remodel;
+      remodel = 0;
+    } else if (remodel > 0 && p.remodelFromPortfolio && buyPort > 0) {
       const grossDraw = remodel / (1 - effSaleRate);
       if (buyPort >= grossDraw) {
         buyPort -= grossDraw;
@@ -346,7 +359,10 @@ function simulate(p) {
       }
     }
     if (m <= remodelMonths) homeValue += remodelValueMo;
-    const gross = pi + propTax + maint + ins + util + strata + remodel;
+    // Interest-only minimum on whatever has been drawn so far
+    const locInterest = locBal > 0 ? locBal * locMoRate : 0;
+    totLOCInterest += locInterest;
+    const gross = pi + propTax + maint + ins + util + strata + remodel + locInterest;
 
     const yearIdx = Math.floor((m - 1) / 12);
 
@@ -415,7 +431,7 @@ function simulate(p) {
     totSuite += suite;
 
     if (m === 12 || (m === months && y1Buy === null)) {
-      y1Buy = { pi, propTax, maint, ins, util, strata, remodel, gross, suite, suiteTax, total: buyCost };
+      y1Buy = { pi, propTax, maint, ins, util, strata, remodel, loc: locInterest, gross, suite, suiteTax, total: buyCost };
       y1Rent = { rent: contractRent, ins: p.rentInsMo * infl, total: rentCost };
     }
 
@@ -522,6 +538,8 @@ function simulate(p) {
     breakPenalty: penaltyAt(months),
     totRemodelFromPort,
     totRemodelTax,
+    totLOCInterest,
+    locBalance: locBal,
     cashToClose: down + closing,
     minDown: (price * minDownPct(price)) / 100,
     belowMin: downPct < minDownPct(price) - 0.001,
@@ -1287,12 +1305,15 @@ function compareProps(p, side) {
     remodelYears: g("RemodelYears"),
     remodelRecoveryPct: g("RemodelRec"),
     keepInvested: p.cpKeep,
-    remodelFromPortfolio: true,
+    remodelFromPortfolio: !p.cpRemodelLOC,
+    remodelFromLOC: !!p.cpRemodelLOC,
+    locRatePct: p.cpLOCRate,
   };
 }
 
 function CompareTab({ raw, set, p, cmp, onLoadA }) {
   const { a, b, pa, pb } = cmp;
+  const locMode = !!p.cpRemodelLOC;
   // Round before subtracting so the gap agrees with the figures on screen
   const advA = Math.round(a.advantage);
   const advB = Math.round(b.advantage);
@@ -1316,6 +1337,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
     ["Maintenance", mo(a, "maint"), mo(b, "maint"), perMo],
     ["Strata", mo(a, "strata"), mo(b, "strata"), perMo, false, true],
     ["Suite, after tax", -mo(a, "suite"), -mo(b, "suite"), perMo, false, true],
+    ["Line of credit interest", mo(a, "loc"), mo(b, "loc"), perMo, false, true],
     ["Net cost, year 1", mo(a, "total"), mo(b, "total"), perMo, true],
   ];
   const signed = (v, fmt) =>
@@ -1387,18 +1409,48 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
         )}
       </Panel>
 
-      {/* ---- the one shared input this tab adds ---- */}
+      {/* ---- how the renovation gets paid for (shared, deliberately:
+              funding is a household decision, and making it per-property
+              would let one side win by financing rather than by merit) ---- */}
       <Panel className="mb-5">
+        <Eyebrow>Paying for renovations</Eyebrow>
+        <div className="flex items-center gap-2" style={{ marginTop: 10, marginBottom: 12 }}>
+          {[[false, "From investments"], [true, "From a line of credit"]].map(([v, label]) => (
+            <button key={label} type="button"
+              onClick={() => set("cpRemodelLOC")(v)}
+              style={{
+                fontFamily: SANS, fontSize: 12,
+                fontWeight: locMode === v ? 600 : 400,
+                color: locMode === v ? C.onBuy : C.mute,
+                background: locMode === v ? C.buy : "transparent",
+                border: "1px solid " + (locMode === v ? C.buy : C.line),
+                borderRadius: 3, padding: "6px 10px", cursor: "pointer",
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="rvb-fields">
           <Field label="Investments kept after closing" prefix="$" step={10000}
                  value={raw.cpKeep} onChange={set("cpKeep")}
-                 hint="What renovations are drawn from, before they fall back to cash" />
+                 hint={locMode ? "Compounds untouched on both sides"
+                               : "What renovations are drawn from, before they fall back to cash"} />
+          {locMode && (
+            <Field label="Line of credit rate" suffix="%" step={0.25}
+                   value={raw.cpLOCRate} onChange={set("cpLOCRate")}
+                   hint="Interest-only minimum, paid monthly" />
+          )}
         </div>
         <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 8, maxWidth: 760 }}>
-          Held on to through the purchase rather than spent on it, and counted
-          the same way whether you buy or rent — so it does not tilt the
-          comparison. Renovation money comes out of here, which realises the
-          capital gain and stops that money compounding.
+          {locMode
+            ? "Renovation draws pile onto the line of credit as the work happens. " +
+              "The interest-only minimum comes out of cash flow each month, and " +
+              "whatever is still owing at the horizon comes off the sale. The " +
+              "investments above stay untouched and keep compounding on both sides."
+            : "Held on to through the purchase rather than spent on it, and counted " +
+              "the same way whether you buy or rent — so it does not tilt the " +
+              "comparison. Renovation money comes out of here, which realises the " +
+              "capital gain and stops that money compounding."}
         </p>
       </Panel>
 
@@ -1482,6 +1534,16 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
                      tone={C.rent} />
                 <Row label="Capital gains tax realised doing so"
                      value={usd(a.totRemodelTax) + "  ·  " + usd(b.totRemodelTax)}
+                     tone={C.rent} />
+              </>
+            )}
+            {(a.totLOCInterest > 0.5 || b.totLOCInterest > 0.5) && (
+              <>
+                <Row label="Line of credit interest paid"
+                     value={usd(a.totLOCInterest) + "  ·  " + usd(b.totLOCInterest)}
+                     tone={C.rent} />
+                <Row label="Still owing on the line of credit"
+                     value={usd(a.locBalance) + "  ·  " + usd(b.locBalance)}
                      tone={C.rent} />
               </>
             )}
@@ -1577,6 +1639,8 @@ const DEFAULTS = {
   // detached place with a suite, against a cheaper one carrying strata that
   // needs work done to it.
   cpKeep: 150000,
+  cpRemodelLOC: false,
+  cpLOCRate: 6.5,
   cpAPrice: 1450000, cpADown: 20, cpAAppr: 3, cpAPropTax: 0.36,
   cpAMaint: 6000, cpAStrata: 0, cpASuite: 1900,
   cpARemodel: 0, cpARemodelYears: 2, cpARemodelRec: 50,
@@ -1605,7 +1669,7 @@ const KEYS = {
   cmpFirstTime: "cf",
   cmpA1: "c1", cmpA2: "c2", cmpA3: "c3", cmpA4: "c4", cmpA5: "c5",
   // Digit-first codes: every code above is alpha-led, so these cannot collide.
-  cpKeep: "0k",
+  cpKeep: "0k", cpRemodelLOC: "0l", cpLOCRate: "0c",
   cpAPrice: "1p", cpADown: "1d", cpAAppr: "1a", cpAPropTax: "1t",
   cpAMaint: "1m", cpAStrata: "1s", cpASuite: "1u",
   cpARemodel: "1r", cpARemodelYears: "1y", cpARemodelRec: "1v",
@@ -1630,6 +1694,13 @@ function stateToHash(raw) {
   return s ? "#" + s : "";
 }
 
+const TAB_IDS = ["buy", "appreciation", "payments", "compare"];
+function tabFromHash() {
+  if (typeof window === "undefined") return "buy";
+  const m = window.location.hash.match(/(?:^#|&)tab=([a-z]+)/);
+  return m && TAB_IDS.includes(m[1]) ? m[1] : "buy";
+}
+
 function hashToState() {
   if (typeof window === "undefined") return {};
   const h = window.location.hash.replace(/^#/, "");
@@ -1649,6 +1720,9 @@ function hashToState() {
 
 export default function RentVsBuy() {
   const [raw, setRaw] = useState(() => ({ ...DEFAULTS, ...hashToState() }));
+  // Declared before the URL-mirror effect below: its dependency array reads
+  // `tab` inline during render, so a later declaration is a TDZ crash.
+  const [tab, setTab] = useState(tabFromHash);
   const [copied, setCopied] = useState(false);
 
   /* Applied during render, before any child reads C. Idempotent, so a
@@ -1661,19 +1735,28 @@ export default function RentVsBuy() {
     setTheme(next);
   };
 
-  // Mirror the inputs into the address bar so any view is a shareable link
+  // Mirror the inputs — and which tab is open — into the address bar so
+  // any view is a shareable link. The tab code is handled outside KEYS:
+  // hashToState skips codes it does not recognise, so it passes through.
   React.useEffect(() => {
     const id = setTimeout(() => {
-      const h = stateToHash(raw);
+      const parts = [];
+      if (tab !== "buy") parts.push("tab=" + tab);
+      const st = stateToHash(raw).replace(/^#/, "");
+      if (st) parts.push(st);
+      const h = parts.length ? "#" + parts.join("&") : "";
       const next = window.location.pathname + window.location.search + h;
       window.history.replaceState(null, "", next);
     }, 250);
     return () => clearTimeout(id);
-  }, [raw]);
+  }, [raw, tab]);
 
   // Someone pasting a link into the same tab, or using back/forward
   React.useEffect(() => {
-    const onHash = () => setRaw({ ...DEFAULTS, ...hashToState() });
+    const onHash = () => {
+      setRaw({ ...DEFAULTS, ...hashToState() });
+      setTab(tabFromHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -1694,7 +1777,6 @@ export default function RentVsBuy() {
     setTimeout(() => setCopied(false), 1800);
   };
   const [showLedger, setShowLedger] = useState(false);
-  const [tab, setTab] = useState("buy");
 
   const p = useMemo(() => {
     const o = {};
