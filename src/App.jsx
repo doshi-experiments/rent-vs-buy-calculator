@@ -13,6 +13,8 @@ import {
   CartesianGrid,
 } from "recharts";
 
+/* MODEL:START — everything to MODEL:END is pure and DOM-free, so the
+   Node test harness can slice it out and assert against it directly. */
 /* ------------------------------------------------------------------ *
  *  Palette + type
  * ------------------------------------------------------------------ */
@@ -179,16 +181,101 @@ function homeOwnerGrant(assessed, on) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Regions
+ *
+ *  The two countries do not merely use different numbers — the mortgage
+ *  mathematics differs. Rather than scatter `if (isUS)` through the model,
+ *  every rule that varies is reached through one profile object, so
+ *  "did I handle both regions" is a single grep for `R.`.
+ *
+ *  The rule functions above stay exactly where they are; this only points
+ *  at them, which keeps the diff on trusted bodies at zero.
+ * ------------------------------------------------------------------ */
+const REGIONS = {
+  ca: {
+    id: "ca",
+    label: "British Columbia",
+    monthlyRate,                                  // semi-annual compounding
+    transferTax: (price, p) => bcPTT(price, p.firstTime),
+    // CMHC is a one-time premium financed into the principal.
+    mortgageInsurance: (downPct, amortYears) =>
+      ({ upfrontPct: cmhcPct(downPct, amortYears), annualPct: 0, cancelLtv: 0 }),
+    minDownPct,
+    insurableCap: 1500000,
+    propTaxCredit: (assessed, p) => homeOwnerGrant(assessed, p.hog),
+    renews: true,
+    breakPenaltyMonths: 3,
+    registered: true,                             // FHSA / HBP exist
+    gainExclusion: () => Infinity,                // principal residence, uncapped
+    acqDebtCap: Infinity,
+    saltCap: Infinity,
+    itemizes: false,                              // no mortgage interest deduction
+    defaults: {},                                 // DEFAULTS *is* the CA baseline
+  },
+
+  us: {
+    id: "us",
+    label: "United States",
+    monthlyRate: (annualPct) => annualPct / 100 / 12,   // monthly, not semi-annual
+    // Title, escrow, recording and lender fees, as a share of price. There is
+    // no federal transfer tax; `firstTime` is ignored rather than repurposed.
+    transferTax: (price, p) => (price * p.usClosingPct) / 100,
+    // PMI is a monthly charge that terminates, not a premium financed into
+    // the loan — so nothing is capitalised and the cancellation is handled
+    // in the monthly loop.
+    mortgageInsurance: (downPct, amortYears, p) =>
+      ({ upfrontPct: 0, annualPct: downPct >= 20 ? 0 : p.pmiPct, cancelLtv: 78 }),
+    minDownPct: () => 3,                          // conventional
+    insurableCap: Infinity,
+    propTaxCredit: () => 0,                       // no Home Owner Grant
+    renews: false,                                // 30-yr fixed
+    breakPenaltyMonths: 0,                        // no prepayment penalty
+    registered: false,                            // no FHSA / HBP
+    gainExclusion: (p) => (p.couple ? 500000 : 250000),   // §121
+    acqDebtCap: 750000,
+    saltCap: 10000,
+    itemizes: true,
+    // Applied only on an explicit region flip — never merged into DEFAULTS,
+    // so old shared links keep parsing as Canada.
+    defaults: {
+      homePrice: 450000, downPct: 20, apprPct: 3.5, firstTime: false,
+      legalFees: 3000, rate: 6.5, renewalRate: 6.5, termYears: 30, amortYears: 30,
+      sellCostPct: 6, propTaxPct: 1.1, hog: false, insYr: 2200, maintYr: 4500,
+      utilYr: 1200, strataMo: 0,
+      rentMo: 2100, rentGrowthPct: 3.5, marketRentGrowthPct: 3.5,
+      suiteRentMo: 0, marginalTaxPct: 32, capGainsPct: 15,
+      fhsaUse: 0, hbpUse: 0, taxableUse: 120000, cashSavings: 0,
+      apprThen: 300000, apprThenYear: 2016, apprNow: 450000, apprNowYear: 2026,
+      cmpRate: 6.5, cmpAmort: 30,
+      cmpA1: 350000, cmpA2: 425000, cmpA3: 500000, cmpA4: 600000, cmpA5: "",
+      cpCash: 150000, cpLOCRate: 8.5,
+      cpAPrice: 450000, cpAPropTax: 1.1, cpAMaint: 4500, cpAStrata: 0, cpASuite: 0,
+      cpBPrice: 380000, cpBPropTax: 1.1, cpBMaint: 3000, cpBStrata: 250, cpBSuite: 0,
+      cpBRemodel: 40000,
+      ivPrice: 400000, ivRate: 7.0, ivApprPct: 3.5, ivPropTaxPct: 1.1,
+      ivInsYr: 2400, ivUtilYr: 1200, ivU1: 1500, ivU2: 1400,
+      ivU3: 1400, ivU4: 1400, ivU5: 1400, ivU6: 1400,
+    },
+  },
+};
+
+/* ------------------------------------------------------------------ *
  *  The model
  * ------------------------------------------------------------------ */
 function simulate(p) {
+  // A string here would be coerced to 0 by the `p` loop and silently run the
+  // wrong country's model, so fail loudly instead of falling back.
+  if (typeof p.us !== "boolean") throw new Error("region flag `us` must be boolean");
+  const R = REGIONS[p.us ? "us" : "ca"];
   const price = p.homePrice;
   const downPct = Math.min(100, Math.max(0, p.downPct));
   const down = (price * downPct) / 100;
-  const ptt = bcPTT(price, p.firstTime);
+  const ptt = R.transferTax(price, p);
   const closing = ptt + p.legalFees;
 
-  const premiumPct = cmhcPct(downPct, p.amortYears);
+  const mi = R.mortgageInsurance(downPct, p.amortYears, p);
+  const premiumPct = mi.upfrontPct;
+  const pmiCutoff = (price * mi.cancelLtv) / 100;
   const baseLoan = Math.max(0, price - down);
   const premium = (baseLoan * premiumPct) / 100;
   const loan = baseLoan + premium; // the premium is added to the mortgage
@@ -196,8 +283,10 @@ function simulate(p) {
   // Where the cash to close comes from. Each dollar carries its own tax character.
   const cashNeeded = down + closing;
   const capMult = p.couple ? 2 : 1;
-  const fhsaCap = 40000 * capMult;
-  const hbpCap = 60000 * capMult;
+  // Clamped in the model, not merely hidden in the UI: a stale URL must not
+  // be able to inject Canadian registered money into a US run.
+  const fhsaCap = R.registered ? 40000 * capMult : 0;
+  const hbpCap = R.registered ? 60000 * capMult : 0;
 
   const fhsaUse = Math.max(0, Math.min(p.fhsaUse, fhsaCap, cashNeeded));
   const hbpUse = Math.max(0, Math.min(p.hbpUse, hbpCap, cashNeeded - fhsaUse));
@@ -231,10 +320,16 @@ function simulate(p) {
   const hbpRepayMonths = 180;
 
   const amortMonths = Math.max(1, Math.round(p.amortYears * 12));
-  const termMonths = Math.max(1, Math.round(p.termYears * 12));
+  // A US 30-yr fixed never renews. Setting the term to the full amortization
+  // makes the renewal condition below unreachable (it needs m > 1 AND
+  // (m-1) % termMonths === 0) in BOTH the main loop and the fullInterest
+  // re-run, which read this same local — no extra branches.
+  const termMonths = R.renews
+    ? Math.max(1, Math.round(p.termYears * 12))
+    : amortMonths;
   const months = Math.max(1, Math.round(p.horizonYears * 12));
 
-  let i = monthlyRate(p.rate);
+  let i = R.monthlyRate(p.rate);
   let pmt = payment(loan, i, amortMonths);
   const firstPayment = pmt;
   let renewalPayment = null;
@@ -278,7 +373,16 @@ function simulate(p) {
     totRemodel = 0,
     totRemodelFromPort = 0,
     totRemodelTax = 0,
-    totLOCInterest = 0;
+    totLOCInterest = 0,
+    totPMI = 0,
+    totTaxBenefit = 0,
+    totRemodelSpent = 0;
+  // Annual buckets for the US itemized settlement. Deductions are an annual,
+  // itemized-vs-standard decision, so they cannot be prorated monthly:
+  // max(standard/12, itemized_m) is not max(standard, sum itemized_m) exactly
+  // in the borderline case that decides most households, and the SALT cap is
+  // annual too.
+  let yrDeductInt = 0, yrSaltProp = 0, yrBalSum = 0, yrMonths = 0;
   // Renovation on a line of credit: draws pile onto the balance, the
   // interest-only minimum is paid from cash flow each month, and whatever
   // is still owing comes off the sale price at the horizon. HELOCs price
@@ -286,17 +390,37 @@ function simulate(p) {
   let locBal = 0;
   const locMoRate = (p.locRatePct || 0) / 100 / 12;
   let payoffMonth = null;
+  let pmiEndsMonth = null;
   let y1Buy = null;
   let y1Rent = null;
 
   // Breaking a fixed mortgage mid-term costs at least three months' interest
+  // Must be zeroed explicitly: with termMonths === amortMonths the modulo is
+  // true nearly every month, so it would otherwise fire constantly.
   const penaltyAt = (mIdx) =>
-    balance > 0 && termMonths > 0 && mIdx % termMonths !== 0 ? balance * i * 3 : 0;
+    R.breakPenaltyMonths > 0 && balance > 0 && termMonths > 0 && mIdx % termMonths !== 0
+      ? balance * i * R.breakPenaltyMonths
+      : 0;
+  // Tax on the home's own gain. Canada needs no branch: its exclusion is
+  // Infinity, so `gain - Infinity` floors at zero and nothing is charged.
+  // Basis is money SPENT, so the remodel's cost — not the value it added.
+  const saleGainTax = (mIdx) => {
+    const realized = homeValue * (1 - p.sellCostPct / 100);
+    const gain = Math.max(0, realized - (price + closing + totRemodelSpent));
+    // §121 wants 2 of the last 5 years of ownership and use.
+    const excl = mIdx >= 24 ? R.gainExclusion(p) : 0;
+    return Math.max(0, gain - excl) * (p.capGainsPct / 100);
+  };
+  // The whole series is a "if you liquidated today" series — that is what
+  // sellCostPct and the break penalty already do at every point — so the
+  // gain tax belongs at every point too. Charging it only at the end would
+  // leave the breakeven search comparing pre-tax months to a post-tax end.
   const netBuy = (mIdx) =>
     homeValue * (1 - p.sellCostPct / 100) -
     balance -
     locBal -
-    penaltyAt(mIdx) +
+    penaltyAt(mIdx) -
+    saleGainTax(mIdx) +
     afterTax(buyPort, buyBasis) +
     buyReg * (1 - marg);
   const netRent = () => afterTax(rentPort, rentBasis) + rentReg * (1 - marg);
@@ -313,11 +437,12 @@ function simulate(p) {
   for (let m = 1; m <= months; m++) {
     // Renewal: the rate resets and the payment is recalculated over what's left
     if (m > 1 && (m - 1) % termMonths === 0 && m <= amortMonths) {
-      i = monthlyRate(p.renewalRate);
+      i = R.monthlyRate(p.renewalRate);
       pmt = payment(balance, i, amortMonths - (m - 1));
       if (renewalPayment === null) renewalPayment = pmt;
     }
 
+    const balOpen = balance;          // PMI bills on this, as interest does
     const interest = balance * i;
     const principal = Math.min(Math.max(pmt - interest, 0), balance);
     const pi = balance > 0 ? interest + principal : 0;
@@ -325,17 +450,28 @@ function simulate(p) {
     if (balance === 0 && payoffMonth === null && loan > 0) payoffMonth = m;
 
     const grossTax = (homeValue * p.propTaxPct) / 100;
-    const propTax = Math.max(0, grossTax - homeOwnerGrant(homeValue, p.hog)) / 12;
+    const propTax = Math.max(0, grossTax - R.propTaxCredit(homeValue, p)) / 12;
     const maint = (p.maintYr / 12) * infl;
     const ins = (p.insYr / 12) * infl;
     const util = (p.utilYr / 12) * infl;
     const strata = p.strataMo * infl;
+    // Statutory termination is 78% of the ORIGINAL value, not the appreciated
+    // one — keying this to homeValue cancels PMI years early and flatters
+    // buying. Not deductible either: that provision lapsed after 2021.
+    const pmi =
+      mi.annualPct > 0 && balOpen > pmiCutoff ? (balOpen * mi.annualPct) / 100 / 12 : 0;
+    totPMI += pmi;
+    // The first month it stops being charged, so the page can say when
+    if (pmiEndsMonth === null && mi.annualPct > 0 && pmi === 0) pmiEndsMonth = m;
     // Renovation money. Drawn from the taxable portfolio when asked for, which
     // both realises the gain and stops that money compounding — the real cost
     // of paying for a kitchen out of investments. Whatever the portfolio
     // cannot cover falls back to coming out of pocket, so the model degrades
     // instead of pretending the money was there.
     let remodel = m <= remodelMonths ? remodelMo : 0;
+    // Basis counts the money that went into the house, whatever paid for it —
+    // capture it before the funding branches below zero `remodel` out.
+    totRemodelSpent += remodel;
     if (remodel > 0 && p.remodelFromLOC) {
       // Nothing leaves the pocket this month — the balance grows instead,
       // and the interest below starts compounding against the decision.
@@ -369,7 +505,7 @@ function simulate(p) {
     // Interest-only minimum on whatever has been drawn so far
     const locInterest = locBal > 0 ? locBal * locMoRate : 0;
     totLOCInterest += locInterest;
-    const gross = pi + propTax + maint + ins + util + strata + remodel + locInterest;
+    const gross = pi + propTax + maint + ins + util + strata + pmi + remodel + locInterest;
 
     const yearIdx = Math.floor((m - 1) / 12);
 
@@ -415,7 +551,35 @@ function simulate(p) {
         totHbpTax += hbpFlow;
       }
     }
-    const diff = buyCost + hbpFlow - rentCost;
+    // Bucket THIS month before settling, or December's interest lands in the
+    // following year and the last year of the horizon loses a month entirely.
+    yrDeductInt += interest;
+    yrSaltProp += propTax;
+    yrBalSum += balOpen;
+    yrMonths += 1;
+
+    // US itemized settlement, at the year boundary or the final partial year.
+    let taxBenefit = 0;
+    if (R.itemizes && (m % 12 === 0 || m === months)) {
+      // Pub 936 average-balance method for the $750k acquisition-debt cap.
+      const avgBal = yrBalSum / Math.max(1, yrMonths);
+      const dedInt = yrDeductInt * Math.min(1, R.acqDebtCap / Math.max(avgBal, 1));
+      const frac = yrMonths / 12;                       // partial final year
+      const stateTax = p.usIncome * (p.usStateTaxPct / 100) * frac;
+      const std = p.usStdDed * (p.couple ? 2 : 1) * frac;
+      // Both sides, always. Comparing the owner's itemized total against the
+      // standard deduction alone would credit them with a deduction they had
+      // anyway — several thousand a year of benefit that does not exist.
+      const ownerItem = dedInt + Math.min(R.saltCap * frac, stateTax + yrSaltProp);
+      const renterItem = Math.min(R.saltCap * frac, stateTax);
+      taxBenefit = marg * (Math.max(ownerItem, std) - Math.max(renterItem, std));
+      totTaxBenefit += taxBenefit;
+      yrDeductInt = 0; yrSaltProp = 0; yrBalSum = 0; yrMonths = 0;
+    }
+
+    // Routed through `diff` rather than straight into netBuy, so the refund
+    // lands in the portfolio and compounds the way a real refund would.
+    const diff = buyCost + hbpFlow - rentCost - taxBenefit;
     if (diff > 0) {
       rentPort += diff;
       rentBasis += diff;
@@ -438,7 +602,7 @@ function simulate(p) {
     totSuite += suite;
 
     if (m === 12 || (m === months && y1Buy === null)) {
-      y1Buy = { pi, propTax, maint, ins, util, strata, remodel, loc: locInterest, gross, suite, suiteTax, total: buyCost };
+      y1Buy = { pi, propTax, maint, ins, util, strata, pmi, remodel, loc: locInterest, gross, suite, suiteTax, total: buyCost };
       y1Rent = { rent: contractRent, ins: p.rentInsMo * infl, total: rentCost };
     }
 
@@ -469,11 +633,11 @@ function simulate(p) {
   let fullInterest = 0;
   if (loan > 0) {
     let b = loan;
-    let ii = monthlyRate(p.rate);
+    let ii = R.monthlyRate(p.rate);
     let pp = payment(b, ii, amortMonths);
     for (let m = 1; m <= amortMonths && b > 0.005; m++) {
       if (m > 1 && (m - 1) % termMonths === 0) {
-        ii = monthlyRate(p.renewalRate);
+        ii = R.monthlyRate(p.renewalRate);
         pp = payment(b, ii, amortMonths - (m - 1));
       }
       const int = b * ii;
@@ -546,10 +710,15 @@ function simulate(p) {
     totRemodelFromPort,
     totRemodelTax,
     totLOCInterest,
+    totPMI,
+    pmiEndsMonth,
+    // What §121 leaves taxable at the horizon. Always 0 in Canada.
+    gainTaxEnd: saleGainTax(months),
+    totTaxBenefit,
     locBalance: locBal,
     cashToClose: down + closing,
-    minDown: (price * minDownPct(price)) / 100,
-    belowMin: downPct < minDownPct(price) - 0.001,
+    minDown: (price * R.minDownPct(price)) / 100,
+    belowMin: downPct < R.minDownPct(price) - 0.001,
     insurable: price < 1500000,
     balanceEnd: balance,
     totInterest,
@@ -571,9 +740,253 @@ function simulate(p) {
   };
 }
 
+
+/* ------------------------------------------------------------------ *
+ *  Investment property
+ *
+ *  A separate model, not a flag on simulate(). simulate()'s spine is
+ *  `diff = buyCost - rentCost` routing a surplus between two HOUSEHOLD
+ *  portfolios; a rental has no renting household. The counterfactual is
+ *  one portfolio seeded with the cash to close, fed by whatever the
+ *  property costs to carry. It reuses what matters — the same `p`, the
+ *  same region profile, payment(), and the same after-tax idiom.
+ * ------------------------------------------------------------------ */
+const IV_UNITS = ["ivU1", "ivU2", "ivU3", "ivU4", "ivU5", "ivU6"];
+const IV_MAX_UNITS = IV_UNITS.length;
+
+function ivUnitCount(p) {
+  return Math.min(IV_MAX_UNITS, Math.max(1, Math.round(p.ivUnitCount || 1)));
+}
+// "Same rent for every unit" DERIVES from unit 1 rather than writing into the
+// other slots. Writing would destroy the per-unit figures; deriving means
+// switching back restores them exactly.
+function ivUnitRent(p, idx) {
+  const v = p.ivSameRent ? p.ivU1 : p[IV_UNITS[idx]];
+  return v > 0 ? v : 0;
+}
+function ivGrossMonthlyRent(p) {
+  let t = 0;
+  for (let k = 0; k < ivUnitCount(p); k++) t += ivUnitRent(p, k);
+  return t;
+}
+
+function simulateRental(p) {
+  if (typeof p.us !== "boolean") throw new Error("region flag `us` must be boolean");
+  const R = REGIONS[p.us ? "us" : "ca"];
+
+  const price = p.ivPrice;
+  const downPct = Math.min(100, Math.max(0, p.ivDownPct));
+  const down = (price * downPct) / 100;
+  // Investors get no first-time exemption and no owner-occupier grant, and
+  // mortgage insurance does not exist on non-owner-occupied property in
+  // either country — so R.mortgageInsurance is deliberately never called.
+  const closing = R.transferTax(price, { ...p, firstTime: false }) + p.legalFees;
+  const loan = Math.max(0, price - down);
+  const cashToClose = down + closing + p.ivInitialCapex;
+
+  const marg = p.marginalTaxPct / 100;
+  const months = Math.max(1, Math.round(p.horizonYears * 12));
+  const amortMonths = Math.max(1, Math.round(p.ivAmort * 12));
+  const i = R.monthlyRate(p.ivRate);
+  const pmt = payment(loan, i, amortMonths);
+
+  // Depreciation applies to the building, never the land.
+  const depBasis = ((price + closing) * p.ivBuildingPct) / 100;
+  const usDepMo = R.id === "us" ? depBasis / 27.5 / 12 : 0;
+  let ucc = R.id === "ca" && p.ivCCA ? depBasis : 0;   // Class 1, 4% declining
+
+  const mAppr = Math.pow(1 + p.ivApprPct / 100, 1 / 12);
+  const mInfl = Math.pow(1 + p.inflPct / 100, 1 / 12);
+  const mInv = Math.pow(1 + Math.max(-99, p.investPct - p.feeDragPct) / 100, 1 / 12);
+
+  let balance = loan, homeValue = price, infl = 1;
+  let accumDep = 0, suspendedPAL = 0, capexSpent = p.ivInitialCapex;
+  // The property's own side, and the "just buy index funds" alternative.
+  let invPort = 0, invBasis = 0;
+  let altPort = cashToClose, altBasis = cashToClose;
+
+  let totEgi = 0, totOpex = 0, totInterest = 0, totTax = 0, totDep = 0, totCF = 0;
+  let yrEgi = 0, yrOpex = 0, yrInt = 0, yrDep = 0, yrMonths = 0;
+  let y1 = null;
+  const years = [];
+
+  const afterTax = (val, basis) => val - Math.max(0, val - basis) * (p.capGainsPct / 100);
+
+  // Exit tax, charged at every point on the series for the same reason the
+  // owner-occupier model charges its gain tax everywhere: the series is a
+  // "if you sold today" series. There is NO §121 here — a rental is not a
+  // principal residence.
+  const exitTax = () => {
+    const realized = homeValue * (1 - p.sellCostPct / 100);
+    if (R.id === "us") {
+      const adjBasis = price + closing + capexSpent - accumDep;
+      const gain = realized - adjBasis;
+      // Recapture can never exceed the gain.
+      const recapture = Math.min(accumDep, Math.max(0, gain));
+      const capGain = Math.max(0, gain - recapture);
+      return recapture * 0.25 + capGain * (p.capGainsPct / 100) - suspendedPAL * marg;
+    }
+    // Canada: recapture is ordinary income, capital gain is separate.
+    const buildingCost = ((price + closing) * p.ivBuildingPct) / 100;
+    const recapture = Math.max(0, Math.min(realized, buildingCost) - (buildingCost - accumDep));
+    const capGain = Math.max(0, realized - (price + closing + capexSpent));
+    return recapture * marg + capGain * (p.capGainsPct / 100);
+  };
+  const netProp = () =>
+    homeValue * (1 - p.sellCostPct / 100) - balance - exitTax() + afterTax(invPort, invBasis);
+  const netAlt = () => afterTax(altPort, altBasis);
+
+  const series = [{ t: 0, buy: netProp(), rent: netAlt() }];
+
+  for (let m = 1; m <= months; m++) {
+    const balOpen = balance;
+    const interest = balance * i;
+    const principal = Math.min(Math.max(pmt - interest, 0), balance);
+    balance = Math.max(0, balance - principal);
+    const debtService = balOpen > 0 ? interest + principal : 0;
+
+    const yearIdx = Math.floor((m - 1) / 12);
+    const gsi = ivGrossMonthlyRent(p) * Math.pow(1 + p.ivRentGrowthPct / 100, yearIdx);
+    const egi = gsi * (1 - p.ivVacancyPct / 100);
+
+    const propTax = (homeValue * p.ivPropTaxPct) / 100 / 12;
+    const fixed = propTax + (p.ivInsYr / 12) * infl + (p.ivUtilYr / 12) * infl +
+                  p.ivHoaMo * infl + (p.ivOtherYr / 12) * infl;
+    // Maintenance, capex reserve and management all scale with collected rent.
+    const variable = (egi * (p.ivMaintPct + p.ivCapexPct + p.ivMgmtPct)) / 100;
+    const opex = fixed + variable;
+    // NOI excludes debt service AND depreciation. Folding the mortgage in here
+    // is the classic error and it corrupts cap rate, DSCR and cash-on-cash all
+    // at once.
+    const noi = egi - opex;
+
+    const dep = R.id === "us" ? usDepMo : 0;
+    accumDep += dep;
+    capexSpent += (egi * p.ivCapexPct) / 100;
+
+    yrEgi += egi; yrOpex += opex; yrInt += interest; yrDep += dep; yrMonths += 1;
+    totEgi += egi; totOpex += opex; totInterest += interest; totDep += dep;
+
+    // Annual tax settlement, same reasoning as the owner-occupier model.
+    let tax = 0;
+    if (m % 12 === 0 || m === months) {
+      const frac = yrMonths / 12;
+      let taxable;
+      if (R.id === "ca" && p.ivCCA) {
+        // CCA cannot create or increase a rental loss (s.1100(11)), and the
+        // half-year rule applies in the first year.
+        const beforeCCA = yrEgi - yrOpex - yrInt;
+        const entitlement = ucc * 0.04 * (yearIdx === 0 ? 0.5 : 1);
+        const cca = Math.min(Math.max(0, beforeCCA), entitlement);
+        ucc -= cca; accumDep += cca; yrDep += cca; totDep += cca;
+        taxable = beforeCCA - cca;
+      } else {
+        taxable = yrEgi - yrOpex - yrInt - yrDep;
+      }
+
+      if (taxable >= 0) {
+        tax = taxable * marg;
+      } else if (R.id === "us") {
+        // §469 passive activity losses. The $25k active-participation
+        // allowance phases out $1 per $2 of MAGI over $100k. Without this a
+        // leveraged rental writes off a loss every early year and the return
+        // is overstated invisibly.
+        const allow = Math.max(0, Math.min(25000, 25000 - (p.usIncome - 100000) / 2)) * frac;
+        const used = Math.min(-taxable, allow);
+        suspendedPAL += -taxable - used;
+        tax = -used * marg;
+      } else {
+        // Canada has no passive-loss regime: rental losses are deductible.
+        tax = taxable * marg;
+      }
+      totTax += tax;
+      yrEgi = 0; yrOpex = 0; yrInt = 0; yrDep = 0; yrMonths = 0;
+    }
+
+    invPort *= mInv; altPort *= mInv;
+    const cashFlow = noi - debtService - tax;
+    totCF += cashFlow;
+    // Negative cash flow is money the investor must feed the property, so the
+    // market alternative receives exactly the same money.
+    if (cashFlow < 0) { altPort += -cashFlow; altBasis += -cashFlow; }
+    else { invPort += cashFlow; invBasis += cashFlow; }
+
+    if (m === 12 || (m === months && y1 === null)) {
+      y1 = { gsi: gsi * 12, egi: egi * 12, opex: opex * 12, noi: noi * 12,
+             debtService: debtService * 12, propTax: propTax * 12,
+             tax: totTax, cashFlow: (noi - debtService) * 12 };
+    }
+    homeValue *= mAppr; infl *= mInfl;
+    if (m % 12 === 0) {
+      years.push({ year: m / 12, homeValue, balance, noi: noi * 12,
+                   equity: homeValue * (1 - p.sellCostPct / 100) - balance,
+                   accumDep, netProp: netProp(), netAlt: netAlt() });
+    }
+    series.push({ t: m / 12, buy: netProp(), rent: netAlt() });
+  }
+
+  const last = series[series.length - 1];
+  const advantage = last.buy - last.rent;
+  let breakeven = null;
+  for (let k = 0; k < series.length; k++) {
+    if (series[k].buy >= series[k].rent && series.slice(k).every((d) => d.buy >= d.rent)) {
+      breakeven = series[k].t; break;
+    }
+  }
+
+  const y = y1 || { gsi: 0, egi: 0, opex: 0, noi: 0, debtService: 0, tax: 0, cashFlow: 0 };
+  const basisForCap = price + p.ivInitialCapex;
+  return {
+    series, years, advantage, breakeven, y1: y,
+    price, loan, down, closing, cashToClose, payment: pmt,
+    unitCount: ivUnitCount(p), grossMonthlyRent: ivGrossMonthlyRent(p),
+    capRate: basisForCap > 0 ? (y.noi / basisForCap) * 100 : 0,
+    cashOnCash: cashToClose > 0 ? ((y.noi - y.debtService) / cashToClose) * 100 : 0,
+    afterTaxCoC: cashToClose > 0 ? ((y.noi - y.debtService - y.tax) / cashToClose) * 100 : 0,
+    dscr: y.debtService > 0 ? y.noi / y.debtService : Infinity,
+    grm: y.gsi > 0 ? price / y.gsi : 0,
+    monthlyCF: (y.noi - y.debtService) / 12,
+    monthlyCFAfterTax: (y.noi - y.debtService - y.tax) / 12,
+    totEgi, totOpex, totInterest, totTax, totDep, totCF,
+    accumDep, suspendedPAL, exitTax: exitTax(),
+    finalValue: homeValue, finalBalance: balance,
+  };
+}
+
+/* MODEL:END */
+
 /* ------------------------------------------------------------------ *
  *  Small UI pieces
  * ------------------------------------------------------------------ */
+// Two-or-more mutually exclusive choices. This recipe was duplicated
+// verbatim on the payments and compare tabs before it was extracted.
+function Segmented({ options, value, onChange }) {
+  return (
+    <div className="flex items-center gap-2">
+      {options.map(([v, label]) => {
+        const on = v === value;
+        return (
+          <button
+            key={String(v)}
+            type="button"
+            onClick={() => onChange(v)}
+            style={{
+              fontFamily: SANS, fontSize: 12,
+              fontWeight: on ? 600 : 400,
+              color: on ? C.onBuy : C.mute,
+              background: on ? C.buy : "transparent",
+              border: "1px solid " + (on ? C.buy : C.line),
+              borderRadius: 3, padding: "6px 10px", cursor: "pointer",
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Eyebrow({ children, tone }) {
   return (
     <div
@@ -591,7 +1004,7 @@ function Eyebrow({ children, tone }) {
   );
 }
 
-function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }) {
+function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, readOnly }) {
   // Says so when characters were dropped, rather than silently changing the
   // number under the user — a stray letter in a pasted figure would
   // otherwise become a different, plausible-looking value.
@@ -615,6 +1028,7 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }
   };
   // type="text" loses the browser's arrow-key stepping, so put it back
   const onKeyDown = (e) => {
+    if (readOnly) return;
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
     const d = (e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? step * 10 : step);
@@ -653,16 +1067,19 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge }
           value={value}
           onChange={handle}
           onKeyDown={onKeyDown}
+          readOnly={readOnly}
+          tabIndex={readOnly ? -1 : undefined}
           className="w-full"
           style={{
             fontFamily: MONO,
             fontSize: 13.5,
-            color: C.ink,
+            color: readOnly ? C.mute : C.ink,
             background: "transparent",
             border: "none",
             outline: "none",
             padding: "7px 4px",
             minWidth: 0,
+            cursor: readOnly ? "default" : "text",
           }}
         />
         {suffix && (
@@ -1025,8 +1442,9 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
 const CMP_SLOTS = ["cmpA1", "cmpA2", "cmpA3", "cmpA4", "cmpA5"];
 
 function comparePayments(p) {
+  const R = REGIONS[p.us ? "us" : "ca"];
   const priceMode = !p.cmpLoanMode;
-  const i = monthlyRate(p.cmpRate);
+  const i = R.monthlyRate(p.cmpRate);
   const n = Math.max(1, Math.round(p.cmpAmort * 12));
   const rows = [];
 
@@ -1037,10 +1455,10 @@ function comparePayments(p) {
 
     if (priceMode) {
       const dp = Math.min(100, Math.max(0, p.cmpDownPct));
-      minDown = minDownPct(amt);
+      minDown = R.minDownPct(amt);
       belowMin = dp + 1e-9 < minDown;
       down = (amt * dp) / 100;
-      premiumPct = cmhcPct(dp, p.cmpAmort);
+      premiumPct = R.mortgageInsurance(dp, p.cmpAmort, p).upfrontPct;
       const base = Math.max(0, amt - down);
       premium = (base * premiumPct) / 100;
       loan = base + premium;
@@ -1052,7 +1470,8 @@ function comparePayments(p) {
     rows.push({
       key: k, idx, amt, down, premium, premiumPct, loan, mo,
       total: mo * n, interest: mo * n - loan,
-      belowMin, minDown, ptt: priceMode ? bcPTT(amt, p.cmpFirstTime) : 0,
+      belowMin, minDown,
+      ptt: priceMode ? R.transferTax(amt, { ...p, firstTime: p.cmpFirstTime }) : 0,
     });
   });
 
@@ -1060,28 +1479,11 @@ function comparePayments(p) {
 }
 
 function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
+  const us = !!p.us;
   const priceMode = !p.cmpLoanMode;
   const maxMo = rows.length ? Math.max(...rows.map((r) => r.mo)) : 0;
   const minMo = rows.length ? Math.min(...rows.map((r) => r.mo)) : 0;
   const cheapest = rows.find((r) => r.mo === minMo);
-
-  const modeBtn = (id, label) => (
-    <button
-      key={id}
-      type="button"
-      onClick={() => set("cmpLoanMode")(id === "loan")}
-      style={{
-        fontFamily: SANS, fontSize: 12,
-        fontWeight: (id === "price") === priceMode ? 600 : 400,
-        color: (id === "price") === priceMode ? C.onBuy : C.mute,
-        background: (id === "price") === priceMode ? C.buy : "transparent",
-        border: "1px solid " + ((id === "price") === priceMode ? C.buy : C.line),
-        borderRadius: 3, padding: "6px 10px", cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
-  );
 
   return (
     <div className="rvb-main">
@@ -1095,15 +1497,20 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
             Up to five amounts, one set of conditions. Leave a row blank to drop it.
           </p>
 
-          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-            {modeBtn("price", "Purchase prices")}
-            {modeBtn("loan", "Mortgage amounts")}
+          <div style={{ marginBottom: 4 }}>
+            <Segmented
+              options={[[false, "Purchase prices"], [true, "Mortgage amounts"]]}
+              value={!priceMode}
+              onChange={(v) => set("cmpLoanMode")(v)}
+            />
           </div>
 
           <Group
             title="The same conditions"
             note={priceMode
-              ? "Applied to every amount below. CMHC is added automatically under 20% down."
+              ? us
+                ? "Applied to every amount below. PMI is charged monthly under 20% down and is not in these figures."
+                : "Applied to every amount below. CMHC is added automatically under 20% down."
               : "Applied to every amount below. These are the mortgage figures themselves."}
           >
             <Field label="Interest rate" suffix="%" step={0.05}
@@ -1122,7 +1529,8 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
               <input type="checkbox" checked={!!raw.cmpFirstTime}
                      onChange={(e) => set("cmpFirstTime")(e.target.checked)} />
               <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>
-                First-time buyer (affects transfer tax, not the payment)
+                {us ? "First-time buyer (affects closing costs, not the payment)"
+                    : "First-time buyer (affects transfer tax, not the payment)"}
               </span>
             </label>
           )}
@@ -1155,7 +1563,8 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
             Monthly payment
           </h2>
           <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14 }}>
-            Principal and interest only — no tax, insurance, strata or upkeep.
+            Principal and interest only — no tax, insurance,{" "}
+            {us ? "HOA dues" : "strata"} or upkeep.
             {priceMode && " Canadian fixed rates compound semi-annually."}
           </p>
 
@@ -1224,7 +1633,8 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
                         fontFamily: SANS, fontSize: 10.5, color: C.signal, marginTop: 5,
                       }}>
                         {trim(p.cmpDownPct)}% is under the {trim(r.minDown)}% minimum down
-                        at this price — a lender would not write this one.
+                        {us ? " on a conventional loan" : " at this price"} — a lender
+                        would not write this one.
                       </div>
                     )}
                     {priceMode && r.premiumPct > 0 && !r.belowMin && (
@@ -1311,7 +1721,8 @@ function compareProps(p, side) {
   const g = (n) => p["cp" + side + n];
   const price = g("Price");
   const down = (price * Math.min(100, Math.max(0, g("Down")))) / 100;
-  const closeCost = down + bcPTT(price, p.firstTime) + p.legalFees;
+  const R = REGIONS[p.us ? "us" : "ca"];
+  const closeCost = down + R.transferTax(price, p) + p.legalFees;
   const cash = Math.max(0, p.cpCash);
   return {
     ...p,
@@ -1340,6 +1751,7 @@ function compareProps(p, side) {
 
 function CompareTab({ raw, set, p, cmp, onLoadA }) {
   const { a, b, pa, pb } = cmp;
+  const us = !!p.us;
   const locMode = !!p.cpRemodelLOC;
   // Round before subtracting so the gap agrees with the figures on screen
   const advA = Math.round(a.advantage);
@@ -1363,7 +1775,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
     ["Payment (P&I)", a.payment, b.payment, perMo],
     ["Property tax", mo(a, "propTax"), mo(b, "propTax"), perMo],
     ["Maintenance", mo(a, "maint"), mo(b, "maint"), perMo],
-    ["Strata", mo(a, "strata"), mo(b, "strata"), perMo, false, true],
+    [us ? "HOA dues" : "Strata", mo(a, "strata"), mo(b, "strata"), perMo, false, true],
     ["Suite, after tax", -mo(a, "suite"), -mo(b, "suite"), perMo, false, true],
     ["Line of credit interest", mo(a, "loc"), mo(b, "loc"), perMo, false, true],
     ["Net cost, year 1", mo(a, "total"), mo(b, "total"), perMo, true],
@@ -1459,8 +1871,9 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
           }}>
             The down payment on{" "}
             {a.belowMin && b.belowMin ? "both properties is" :
-             a.belowMin ? "Property A is" : "Property B is"} below BC's minimum
-            for the price — a lender would not write that mortgage.
+             a.belowMin ? "Property A is" : "Property B is"} below the minimum
+            {us ? " on a conventional loan" : " for the price in BC"} — a lender
+            would not write that mortgage.
           </div>
         )}
 
@@ -1482,26 +1895,18 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
               would let one side win by financing rather than by merit) ---- */}
       <Panel className="mb-5">
         <Eyebrow>Paying for renovations</Eyebrow>
-        <div className="flex items-center gap-2" style={{ marginTop: 10, marginBottom: 12 }}>
-          {[[false, "From investments"], [true, "From a line of credit"]].map(([v, label]) => (
-            <button key={label} type="button"
-              onClick={() => set("cpRemodelLOC")(v)}
-              style={{
-                fontFamily: SANS, fontSize: 12,
-                fontWeight: locMode === v ? 600 : 400,
-                color: locMode === v ? C.onBuy : C.mute,
-                background: locMode === v ? C.buy : "transparent",
-                border: "1px solid " + (locMode === v ? C.buy : C.line),
-                borderRadius: 3, padding: "6px 10px", cursor: "pointer",
-              }}>
-              {label}
-            </button>
-          ))}
+        <div style={{ marginTop: 10, marginBottom: 12 }}>
+          <Segmented
+            options={[[false, "From investments"], [true, "From a line of credit"]]}
+            value={locMode}
+            onChange={(v) => set("cpRemodelLOC")(v)}
+          />
         </div>
         <div className="rvb-fields">
           <Field label="Total available cash" prefix="$" step={25000}
                  value={raw.cpCash} onChange={set("cpCash")}
-                 hint="Down payment, transfer tax and legal come out of this; the rest is invested" />
+                 hint={"Down payment, " + (us ? "closing costs" : "transfer tax") +
+                       " and legal come out of this; the rest is invested"} />
           {locMode && (
             <Field label="Line of credit rate" suffix="%" step={0.25}
                    value={raw.cpLOCRate} onChange={set("cpLOCRate")}
@@ -1541,7 +1946,9 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
             </div>
             <div className="rvb-fields mt-3">
               {CP_FIELDS.map(([k, label, prefix, suffix, step]) => (
-                <Field key={k} label={label} prefix={prefix} suffix={suffix} step={step}
+                <Field key={k}
+                       label={us ? { "Strata fee": "HOA dues", "Suite rent": "Rental income" }[label] || label : label}
+                       prefix={prefix} suffix={suffix} step={step}
                        value={raw["cp" + id + k]} onChange={set("cp" + id + k)} />
               ))}
             </div>
@@ -1638,10 +2045,428 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Investment property
+ * ------------------------------------------------------------------ */
+
+// One metric, stated plainly, with the sentence that says how to read it.
+function Metric({ label, value, tone, note }) {
+  return (
+    <div style={{ borderLeft: "3px solid " + (tone || C.line), paddingLeft: 10 }}>
+      <Eyebrow>{label}</Eyebrow>
+      <div style={{ fontFamily: MONO, fontSize: 20, fontWeight: 600, marginTop: 3, color: tone || C.ink }}>
+        {value}
+      </div>
+      {note && (
+        <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 2, lineHeight: 1.35 }}>
+          {note}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvestTab({ raw, set, p, iv }) {
+  const us = !!p.us;
+  const units = iv.unitCount;
+  const same = !!p.ivSameRent;
+  const adv = Math.round(iv.advantage);
+  const ahead = adv >= 0;
+  const cf = iv.monthlyCFAfterTax;
+
+  const be =
+    iv.breakeven === null
+      ? "not within " + trim(p.horizonYears) + " years"
+      : iv.breakeven === 0
+      ? "immediately"
+      : "year " + trim(iv.breakeven);
+
+  // Year one, top to bottom. Negatives are money going out, so the ledger
+  // reads the way an operating statement does.
+  const y = iv.y1;
+  const stmt = [
+    ["Gross scheduled rent", y.gsi, false],
+    ["Vacancy", y.egi - y.gsi, false],
+    ["Effective gross income", y.egi, true],
+    ["Operating expenses", -y.opex, false],
+    ["Net operating income", y.noi, true],
+    ["Mortgage (P&I)", -y.debtService, false],
+    ["Cash flow before tax", y.noi - y.debtService, true],
+    ["Income tax", -y.tax, false],
+    ["Cash flow after tax", y.noi - y.debtService - y.tax, true],
+  ];
+
+  return (
+    <>
+      {/* ---- the verdict ---- */}
+      <Panel className="mb-5">
+        <Eyebrow>
+          Investment property · {us ? "United States" : "British Columbia"} ·
+          {" "}buy and rent out
+        </Eyebrow>
+        <h1 style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+          {ahead ? "This property beats" : "This property trails"} the market by{" "}
+          <span style={{ color: ahead ? C.buy : C.rent, borderBottom: "3px solid " + (ahead ? C.buy : C.rent) }}>
+            {usd(Math.abs(adv))}
+          </span>{" "}
+          after {trim(p.horizonYears)} years.
+        </h1>
+        <p style={{ fontFamily: SANS, fontSize: 13.5, color: C.mute, marginTop: 12, maxWidth: 760, lineHeight: 1.5 }}>
+          The alternative is putting the whole {usd(iv.cashToClose)} of cash to
+          close into the market at {trim(p.investPct)}% instead, and feeding it
+          every dollar the property would have needed from you. Both sides are
+          sold at the horizon and taxed. Owning pulls ahead{" "}
+          <strong style={{ color: C.ink, fontWeight: 600 }}>{be}</strong>.
+        </p>
+
+        <div className="rvb-metrics mt-5">
+          <Metric label="Cap rate" value={trim(iv.capRate) + "%"} tone={C.buy}
+                  note="Year-one NOI over price plus up-front work — the return with no mortgage in it" />
+          <Metric label="Cash on cash" value={trim(iv.cashOnCash) + "%"}
+                  tone={iv.cashOnCash >= 0 ? C.buy : C.rent}
+                  note={"Pre-tax cash flow over the " + usd(iv.cashToClose) + " you put in"} />
+          <Metric label="DSCR"
+                  value={isFinite(iv.dscr) ? iv.dscr.toFixed(2) : "—"}
+                  tone={iv.dscr >= 1.2 ? C.buy : iv.dscr >= 1 ? C.signal : C.rent}
+                  note="NOI over the mortgage payment. Most lenders want 1.20 or better" />
+          <Metric label="Cash flow" value={usd(cf) + "/mo"}
+                  tone={cf >= 0 ? C.buy : C.rent}
+                  note={cf >= 0 ? "After the mortgage and tax" : "You feed the property this every month"} />
+        </div>
+
+        <div style={{ marginTop: 18, borderTop: "1px solid " + C.line, paddingTop: 14 }}>
+          <SliderRow label="Time period" value={p.horizonYears}
+                     onChange={set("horizonYears")}
+                     min={1} max={30} step={1} suffix="yr" accent={C.buy} />
+        </div>
+
+        {iv.dscr < 1 && (
+          <div style={{ marginTop: 14, padding: "9px 12px", borderRadius: 3,
+                        background: C.rentWash, fontFamily: SANS, fontSize: 11.5, color: C.rent }}>
+            Net operating income does not cover the mortgage
+            (DSCR {isFinite(iv.dscr) ? iv.dscr.toFixed(2) : "—"}). Most lenders
+            will not write this loan as an investment mortgage, and it needs
+            {" "}{usd(-iv.monthlyCF)} a month out of your pocket before tax.
+          </div>
+        )}
+      </Panel>
+
+      {/* ---- the units ---- */}
+      <Panel className="mb-5">
+        <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>Rental units</h2>
+        <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14 }}>
+          {usd(iv.grossMonthlyRent)} a month across {units}{" "}
+          {units === 1 ? "unit" : "units"}, before vacancy.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3" style={{ marginBottom: 14 }}>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>Units</span>
+          <Segmented
+            options={[1, 2, 3, 4, 5, 6].map((n) => [n, String(n)])}
+            value={units}
+            onChange={(n) => set("ivUnitCount")(n)}
+          />
+          <label className="flex items-center gap-2 cursor-pointer" style={{ marginLeft: 4 }}>
+            <input
+              type="checkbox"
+              checked={same}
+              onChange={(e) => set("ivSameRent")(e.target.checked)}
+              style={{ accentColor: C.buy, width: 14, height: 14 }}
+            />
+            <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+              Same rent for every unit
+            </span>
+          </label>
+        </div>
+
+        <div className="rvb-fields">
+          {IV_UNITS.slice(0, units).map((k, idx) => (
+            <Field
+              key={k}
+              label={"Unit " + (idx + 1) + (idx === 0 && same ? " · all units" : "")}
+              prefix="$" suffix="/mo" step={50}
+              value={same && idx > 0 ? raw.ivU1 : raw[k]}
+              onChange={set(k)}
+              readOnly={same && idx > 0}
+              hint={same && idx > 0 ? "Following unit 1" : undefined}
+            />
+          ))}
+        </div>
+        {same && units > 1 && (
+          <p style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 8 }}>
+            Unit 1's rent is being applied to all {units}. Your per-unit figures
+            are kept — switch this off and they come back exactly as they were.
+          </p>
+        )}
+      </Panel>
+
+      {/* ---- inputs ---- */}
+      <div className="rvb-pair mb-5">
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 12 }}>The purchase</h2>
+          <div className="rvb-fields">
+            <Field label="Purchase price" prefix="$" step={25000}
+                   value={raw.ivPrice} onChange={set("ivPrice")} />
+            <Field label="Down payment" suffix="%" step={5}
+                   value={raw.ivDownPct} onChange={set("ivDownPct")}
+                   hint={usd(iv.down) + " · " + (us ? "20–25% is typical" : "20% minimum on a rental")} />
+            <Field label="Mortgage rate" suffix="%" step={0.25}
+                   value={raw.ivRate} onChange={set("ivRate")}
+                   hint="Investor rates run 50–100bp above owner-occupied" />
+            <Field label="Amortization" suffix="yr" step={5}
+                   value={raw.ivAmort} onChange={set("ivAmort")} />
+            <Field label="Appreciation" suffix="%/yr" step={0.5}
+                   value={raw.ivApprPct} onChange={set("ivApprPct")} />
+            <Field label="Up-front work" prefix="$" step={5000}
+                   value={raw.ivInitialCapex} onChange={set("ivInitialCapex")}
+                   hint="Spent before the first tenant. Adds to your basis" />
+          </div>
+          <div className="mt-4">
+            <Row label="Mortgage" value={usd(iv.loan)} />
+            <Row label="Payment (P&I)" value={usd(iv.payment) + "/mo"} />
+            <Row label={us ? "Closing costs" : "Property transfer tax and legal"}
+                 value={usd(iv.closing)} />
+            <Row label="Cash to close" value={usd(iv.cashToClose)} strong />
+            <Row label="Gross rent multiplier"
+                 value={iv.grm > 0 ? iv.grm.toFixed(1) : "—"} />
+          </div>
+        </Panel>
+
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 12 }}>Running it</h2>
+          <div className="rvb-fields">
+            <Field label="Vacancy" suffix="%" step={1}
+                   value={raw.ivVacancyPct} onChange={set("ivVacancyPct")}
+                   hint="Of gross rent, every year" />
+            <Field label="Rent growth" suffix="%/yr" step={0.5}
+                   value={raw.ivRentGrowthPct} onChange={set("ivRentGrowthPct")} />
+            <Field label="Property tax" suffix="%" step={0.05}
+                   value={raw.ivPropTaxPct} onChange={set("ivPropTaxPct")}
+                   hint="Of value, which grows with the property" />
+            <Field label="Insurance" prefix="$" suffix="/yr" step={200}
+                   value={raw.ivInsYr} onChange={set("ivInsYr")} />
+            <Field label={us ? "HOA" : "Strata"} prefix="$" suffix="/mo" step={50}
+                   value={raw.ivHoaMo} onChange={set("ivHoaMo")} />
+            <Field label="Utilities you pay" prefix="$" suffix="/yr" step={200}
+                   value={raw.ivUtilYr} onChange={set("ivUtilYr")} />
+            <Field label="Other fixed costs" prefix="$" suffix="/yr" step={200}
+                   value={raw.ivOtherYr} onChange={set("ivOtherYr")}
+                   hint="Licensing, accounting, landscaping" />
+            <Field label="Maintenance" suffix="%" step={1}
+                   value={raw.ivMaintPct} onChange={set("ivMaintPct")}
+                   hint="Of collected rent" />
+            <Field label="Capex reserve" suffix="%" step={1}
+                   value={raw.ivCapexPct} onChange={set("ivCapexPct")}
+                   hint="Roof, furnace, appliances. Adds to basis" />
+            <Field label="Management" suffix="%" step={1}
+                   value={raw.ivMgmtPct} onChange={set("ivMgmtPct")}
+                   hint="Zero if you manage it yourself — but cost your time" />
+          </div>
+          <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 12, lineHeight: 1.45 }}>
+            Fixed costs grow with inflation at {trim(p.inflPct)}%; the three
+            percentages scale with collected rent. None of them are part of net
+            operating income's opposite number — the mortgage stays out of NOI,
+            which is what keeps cap rate, DSCR and cash-on-cash comparable to
+            any other deal.
+          </p>
+        </Panel>
+      </div>
+
+      {/* ---- depreciation and tax ---- */}
+      <Panel className="mb-5">
+        <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>
+          Depreciation and tax
+        </h2>
+        <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14, maxWidth: 820 }}>
+          {us
+            ? "Residential rental property is written off straight-line over 27.5 years, " +
+              "and it is not optional — the IRS recaptures it at sale whether or not you " +
+              "claimed it. Recapture is taxed at 25%, above the capital gains rate."
+            : "Capital cost allowance is optional in Canada, and often worth skipping: it " +
+              "comes back as ordinary income at your full marginal rate on sale, while the " +
+              "gain it shelters is only half-taxed. It also cannot create or increase a " +
+              "rental loss."}
+        </p>
+        <div className="rvb-fields">
+          <Field label="Building share of value" suffix="%" step={5}
+                 value={raw.ivBuildingPct} onChange={set("ivBuildingPct")}
+                 hint="Land is never depreciated. 55–70% is usual" />
+          {us && (
+            <Field label="Your other income" prefix="$" step={10000}
+                   value={raw.usIncome} onChange={set("usIncome")}
+                   hint="Sets how much of a rental loss you can deduct now" />
+          )}
+        </div>
+        {!us && (
+          <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 12 }}>
+            <input
+              type="checkbox"
+              checked={!!raw.ivCCA}
+              onChange={(e) => set("ivCCA")(e.target.checked)}
+              style={{ accentColor: C.buy, width: 14, height: 14 }}
+            />
+            <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+              Claim capital cost allowance (Class 1, 4% declining)
+            </span>
+          </label>
+        )}
+
+        <div className="mt-4">
+          <Row label={us ? "Depreciation taken" : "CCA claimed"} value={usd(iv.totDep)} />
+          {us && iv.suspendedPAL > 0.5 && (
+            <Row label="Losses suspended to sale" value={usd(iv.suspendedPAL)} tone={C.signal} />
+          )}
+          <Row label="Tax on the sale" value={usd(iv.exitTax)} tone={C.rent} />
+        </div>
+        {us && iv.suspendedPAL > 0.5 && (
+          <p style={{ fontFamily: SANS, fontSize: 11, color: C.signal, marginTop: 8, maxWidth: 820 }}>
+            Your income is high enough that the $25,000 active-participation
+            allowance is partly or fully phased out, so {usd(iv.suspendedPAL)} of
+            rental losses cannot be deducted as they happen. They are not lost —
+            they are released against the gain when you sell.
+          </p>
+        )}
+        {!us && (
+          <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 8, maxWidth: 820 }}>
+            Canadian rental losses are deductible against your other income in
+            the year they happen — the opposite of the US rule, where a
+            high earner's losses wait until the sale.
+          </p>
+        )}
+      </Panel>
+
+      {/* ---- year one, line by line ---- */}
+      <div className="rvb-pair mb-5">
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Year one</h2>
+          <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 12 }}>
+            Annual figures. This is the statement a lender or a partner asks for.
+          </p>
+          <div>
+            {stmt.map(([label, v, strong]) => (
+              <Row key={label} label={label} value={usd(v)} strong={strong}
+                   tone={strong ? (v >= 0 ? C.ink : C.rent) : v < 0 ? C.mute : undefined} />
+            ))}
+          </div>
+        </Panel>
+
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>
+            Over {trim(p.horizonYears)} years
+          </h2>
+          <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 12 }}>
+            Everything the property collected, spent and owed, then what is left
+            when you sell.
+          </p>
+          <div>
+            <Row label="Rent collected" value={usd(iv.totEgi)} />
+            <Row label="Operating expenses" value={usd(-iv.totOpex)} tone={C.mute} />
+            <Row label="Mortgage interest" value={usd(-iv.totInterest)} tone={C.mute} />
+            <Row label="Income tax" value={usd(-iv.totTax)} tone={C.mute} />
+            <Row label="Cash flow, cumulative" value={usd(iv.totCF)}
+                 tone={iv.totCF >= 0 ? C.buy : C.rent} strong />
+            <Row label="Value at the horizon" value={usd(iv.finalValue)} />
+            <Row label="Mortgage still owing" value={usd(iv.finalBalance)} tone={C.mute} />
+            <Row label="Tax on the sale" value={usd(-iv.exitTax)} tone={C.mute} />
+            <Row label="Net if you sell" value={usd(iv.series[iv.series.length - 1].buy)} strong />
+            <Row label="The market instead" value={usd(iv.series[iv.series.length - 1].rent)} strong
+                 tone={C.rent} />
+          </div>
+        </Panel>
+      </div>
+
+      {/* ---- the chart ---- */}
+      <Panel>
+        <div className="flex items-baseline justify-between mb-1">
+          <h2 style={{ fontFamily: SERIF, fontSize: 21 }}>Property against the market</h2>
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-2">
+              <span style={{ width: 14, height: 3, background: C.buy, display: "inline-block" }} />
+              <span style={{ fontFamily: MONO, fontSize: 11, color: C.buy }}>PROPERTY</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span style={{ width: 14, height: 3, background: C.rent, display: "inline-block" }} />
+              <span style={{ fontFamily: MONO, fontSize: 11, color: C.rent }}>MARKET</span>
+            </span>
+          </div>
+        </div>
+        <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 10 }}>
+          Both lines are after selling costs and tax, at every month — what you
+          would actually walk away with if you got out that day.
+        </p>
+        <div className="rvb-chart">
+          <ResponsiveContainer>
+            <ComposedChart data={iv.series} margin={{ top: 18, right: 10, bottom: 4, left: 0 }}>
+              <CartesianGrid stroke={C.line} vertical={false} />
+              <XAxis
+                dataKey="t" type="number" domain={[0, p.horizonYears]}
+                tickFormatter={(v) => (v === 0 ? "now" : "yr " + v)}
+                tick={{ fontFamily: MONO, fontSize: 10.5, fill: C.mute }}
+                stroke={C.line}
+              />
+              <YAxis
+                tickFormatter={compact}
+                tick={{ fontFamily: MONO, fontSize: 10.5, fill: C.mute }}
+                stroke={C.line} width={58}
+              />
+              <Tooltip
+                cursor={{ stroke: C.mute, strokeDasharray: "3 3" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload || !payload.length) return null;
+                  const d = payload[0].payload;
+                  const lead = d.buy - d.rent;
+                  return (
+                    <div style={{
+                      background: C.field, border: "1px solid " + C.line,
+                      borderRadius: 3, padding: "8px 10px", fontFamily: MONO, fontSize: 12,
+                    }}>
+                      <div style={{ color: C.mute, fontSize: 10.5, marginBottom: 4 }}>
+                        {d.t === 0 ? "TODAY" : "YEAR " + d.t.toFixed(1)}
+                      </div>
+                      <div style={{ color: C.buy }}>Property · {usd(d.buy)}</div>
+                      <div style={{ color: C.rent }}>Market · {usd(d.rent)}</div>
+                      <div style={{ color: C.ink, marginTop: 4, borderTop: "1px solid " + C.line, paddingTop: 4 }}>
+                        {lead >= 0 ? "Property" : "Market"} ahead {usd(Math.abs(lead))}
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              {iv.breakeven !== null && iv.breakeven > 0 && (
+                <ReferenceLine
+                  x={iv.breakeven} stroke={C.signal} strokeWidth={2}
+                  label={{ value: "break even", position: "top", offset: 6,
+                           fontFamily: MONO, fontSize: 10, fill: C.signal }}
+                />
+              )}
+              <Line dataKey="buy" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line dataKey="rent" stroke={C.rent} strokeWidth={2} dot={false} isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 12, maxWidth: 900, lineHeight: 1.5 }}>
+          The rate of return, the fee drag and the capital gains rate all come
+          from the first tab, so this is measured against the same market you
+          are comparing your own home to. Negative cash flow is paid to the
+          property and credited to the market side, which is why a property
+          that loses money every month is not automatically behind.
+        </p>
+      </Panel>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
  *  Main
  * ------------------------------------------------------------------ */
 const DEFAULTS = {
   // British Columbia, July 2026
+  us: false,               // region: false = Canada. Absence means Canada, forever.
+  // US-only. Inert in Canada, never repurposed.
+  usIncome: 180000,
+  usStateTaxPct: 5,
+  usStdDed: 15000,         // single filer; doubled when `couple`
+  pmiPct: 0.55,
+  usClosingPct: 1.0,
   homePrice: 1450000,
   downPct: 20,
   apprPct: 3,
@@ -1715,10 +2540,20 @@ const DEFAULTS = {
   cpBPrice: 1250000, cpBDown: 20, cpBAppr: 3, cpBPropTax: 0.36,
   cpBMaint: 4000, cpBStrata: 350, cpBSuite: 0,
   cpBRemodel: 60000, cpBRemodelYears: 1, cpBRemodelRec: 50,
+  // Investment property. A duplex in the Lower Mainland, on an investor rate.
+  ivPrice: 1100000, ivDownPct: 25, ivRate: 5.25, ivAmort: 30, ivApprPct: 3,
+  ivUnitCount: 2, ivSameRent: false,
+  ivU1: 2400, ivU2: 1900, ivU3: 1800, ivU4: 1800, ivU5: 1800, ivU6: 1800,
+  ivVacancyPct: 4, ivRentGrowthPct: 3,
+  ivPropTaxPct: 0.36, ivInsYr: 2600, ivHoaMo: 0, ivUtilYr: 1400, ivOtherYr: 600,
+  ivMaintPct: 8, ivCapexPct: 5, ivMgmtPct: 8,
+  ivInitialCapex: 0, ivBuildingPct: 60, ivCCA: false,
 };
 
 
 const KEYS = {
+  us: "us", usIncome: "ui", usStateTaxPct: "ux", usStdDed: "ud",
+  pmiPct: "um", usClosingPct: "uc",
   homePrice: "p", downPct: "d", apprPct: "a", firstTime: "ft", legalFees: "lf",
   rate: "r", renewalRate: "rr", termYears: "tm", amortYears: "am", sellCostPct: "sc",
   propTaxPct: "pt", hog: "hg", insYr: "ins", maintYr: "mt", utilYr: "ut", strataMo: "st",
@@ -1744,8 +2579,32 @@ const KEYS = {
   cpBPrice: "2p", cpBDown: "2d", cpBAppr: "2a", cpBPropTax: "2t",
   cpBMaint: "2m", cpBStrata: "2s", cpBSuite: "2u",
   cpBRemodel: "2r", cpBRemodelYears: "2y", cpBRemodelRec: "2v",
+  // Investment tab. `3*` is free: 0/1/2 belong to the compare tab.
+  ivPrice: "3p", ivDownPct: "3d", ivRate: "3r", ivAmort: "3q", ivApprPct: "3a",
+  ivUnitCount: "3n", ivSameRent: "3e",
+  ivU1: "31", ivU2: "32", ivU3: "33", ivU4: "34", ivU5: "35", ivU6: "36",
+  ivVacancyPct: "3v", ivRentGrowthPct: "3g", ivPropTaxPct: "3t", ivInsYr: "3i",
+  ivMaintPct: "3m", ivCapexPct: "3x", ivMgmtPct: "3w", ivHoaMo: "3h",
+  ivUtilYr: "3l", ivOtherYr: "3o", ivInitialCapex: "3c", ivBuildingPct: "3b",
+  ivCCA: "3y",
 };
 const CODE_TO_KEY = Object.fromEntries(Object.entries(KEYS).map(([k, v]) => [v, k]));
+
+// Static data, so this either always passes or always throws — a duplicated
+// URL code would silently make one field overwrite another in every shared
+// link, which is exactly the kind of bug that never shows up on screen.
+{
+  const codes = Object.values(KEYS);
+  if (new Set(codes).size !== codes.length) {
+    const seen = new Set(), dupes = [];
+    for (const c of codes) { if (seen.has(c)) dupes.push(c); seen.add(c); }
+    throw new Error("duplicate URL codes in KEYS: " + dupes.join(", "));
+  }
+  const missing = Object.keys(KEYS).filter((k) => !(k in DEFAULTS));
+  const unserialised = Object.keys(DEFAULTS).filter((k) => !(k in KEYS));
+  if (missing.length) throw new Error("KEYS without DEFAULTS: " + missing.join(", "));
+  if (unserialised.length) throw new Error("DEFAULTS not in KEYS: " + unserialised.join(", "));
+}
 
 function stateToHash(raw) {
   const q = new URLSearchParams();
@@ -1762,7 +2621,16 @@ function stateToHash(raw) {
   return s ? "#" + s : "";
 }
 
-const TAB_IDS = ["buy", "appreciation", "payments", "compare"];
+// One list, not two: the ids and the labels used to live apart and had to
+// be kept in sync by hand.
+const TABS = [
+  ["buy", "Rent vs. buy"],
+  ["appreciation", "Appreciation calculator"],
+  ["payments", "Payment comparison"],
+  ["compare", "Two properties"],
+  ["invest", "Investment property"],
+];
+const TAB_IDS = TABS.map((t) => t[0]);
 function tabFromHash() {
   if (typeof window === "undefined") return "buy";
   const m = window.location.hash.match(/(?:^#|&)tab=([a-z]+)/);
@@ -1792,6 +2660,9 @@ export default function RentVsBuy() {
   // `tab` inline during render, so a later declaration is a TDZ crash.
   const [tab, setTab] = useState(tabFromHash);
   const [copied, setCopied] = useState(false);
+  // Deliberately not in the URL: an undo offer is a property of this session,
+  // not of the scenario being shared.
+  const [undo, setUndo] = useState(null);
 
   /* Applied during render, before any child reads C. Idempotent, so a
    * double render costs nothing. */
@@ -1802,6 +2673,32 @@ export default function RentVsBuy() {
     writeTheme(next);
     setTheme(next);
   };
+
+  /* Switching country resets every figure to that country's defaults: a
+   * $1.45M Vancouver price and a 4.24% Canadian rate are not a sane
+   * starting point for a US answer, and half-converted inputs are worse
+   * than either. Only the horizon and the household carry over, because
+   * those are facts about the person rather than the market. The undo
+   * makes the reset safe to try. */
+  const switchRegion = (toUS) => {
+    if (toUS === Boolean(raw.us)) return;
+    setUndo({ raw, to: REGIONS[toUS ? "us" : "ca"].label });
+    setRaw((s) => ({
+      ...DEFAULTS,
+      ...(toUS ? REGIONS.us.defaults : {}),
+      us: toUS,
+      horizonYears: s.horizonYears,
+      couple: s.couple,
+    }));
+  };
+  // Long enough to notice and act on, gone before it becomes furniture.
+  // Deliberately not cleared by typing: someone who changes one number and
+  // then realises still wants the way back.
+  React.useEffect(() => {
+    if (!undo) return;
+    const id = setTimeout(() => setUndo(null), 14000);
+    return () => clearTimeout(id);
+  }, [undo]);
 
   // Mirror the inputs — and which tab is open — into the address bar so
   // any view is a shareable link. The tab code is handled outside KEYS:
@@ -1853,15 +2750,29 @@ export default function RentVsBuy() {
   }, [raw]);
 
   const set = (k) => (v) => setRaw((s) => ({ ...s, [k]: v }));
+  // Which country's copy the page is written in. The model reads `p.us`;
+  // this is only ever used for words on screen.
+  const US = !!p.us;
+
+  /* Every memo below is gated on the open tab. The buy tab alone runs
+   * simulate() 26 times per keystroke (once, plus 25 for the sensitivity
+   * strips); without the gate every other tab paid for those too. Each
+   * result is read only inside its own tab's branch, so the nulls are
+   * never dereferenced. */
   const r = useMemo(() => simulate(p), [p]);
-  const cmpRows = useMemo(() => comparePayments(p), [p]);
+  const cmpRows = useMemo(
+    () => (tab === "payments" ? comparePayments(p) : null), [p, tab]);
   const cmp = useMemo(() => {
+    if (tab !== "compare") return null;
     const pa = compareProps(p, "A"), pb = compareProps(p, "B");
     return { a: simulate(pa), b: simulate(pb), pa, pb };
-  }, [p]);
+  }, [p, tab]);
+  const iv = useMemo(
+    () => (tab === "invest" ? simulateRental(p) : null), [p, tab]);
 
   // Appreciation tool
   const appr = useMemo(() => {
+    if (tab !== "appreciation") return null;
     const then = p.apprThen;
     const now = p.apprNow;
     const years = p.apprUseSpan ? p.apprSpan : p.apprNowYear - p.apprThenYear;
@@ -1882,9 +2793,10 @@ export default function RentVsBuy() {
       }
     }
     return { then, now, years, valid, cagr, totalPct, doubling, curve };
-  }, [p]);
+  }, [p, tab]);
 
   const sens = useMemo(() => {
+    if (tab !== "buy") return null;
     const appr = [-2, -1, 0, 1, 2].map((d) => ({
       d,
       cur: d === 0,
@@ -1934,7 +2846,7 @@ export default function RentVsBuy() {
       };
     });
     return { appr, inv, renew, suite, reg };
-  }, [p]);
+  }, [p, tab]);
 
   const buyWins = r.advantage >= 0;
   const winner = buyWins ? "Buying" : "Renting";
@@ -2016,6 +2928,10 @@ export default function RentVsBuy() {
     .rvb-pair-wide { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
     @media (min-width: 1500px) { .rvb-pair-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+    /* Metric strip: four across when there is room, two up otherwise */
+    .rvb-metrics { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (min-width: 1100px) { .rvb-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
     /* Side-by-side comparison; the difference column is the first to go */
     .rvb-cmp { display: grid; grid-template-columns: 1fr auto auto auto; column-gap: 16px; }
     @media (max-width: 760px) {
@@ -2048,12 +2964,7 @@ export default function RentVsBuy() {
       <div className="rvb-shell px-5 py-8">
         {/* Tabs */}
         <div className="flex items-center gap-1 mb-5" style={{ borderBottom: "1px solid " + C.line }}>
-          {[
-            ["buy", "Rent vs. buy"],
-            ["appreciation", "Appreciation calculator"],
-            ["payments", "Payment comparison"],
-            ["compare", "Two properties"],
-          ].map(([id, label]) => (
+          {TABS.map(([id, label]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -2074,6 +2985,15 @@ export default function RentVsBuy() {
             </button>
           ))}
 
+          {/* Which country's rules the whole page runs on */}
+          <div style={{ marginLeft: "auto", marginBottom: 6, marginRight: 10 }}>
+            <Segmented
+              options={[[false, "Canada"], [true, "United States"]]}
+              value={!!raw.us}
+              onChange={switchRegion}
+            />
+          </div>
+
           {/* the same switch that sits on the two sheets */}
           <button
             type="button"
@@ -2083,7 +3003,7 @@ export default function RentVsBuy() {
               ? "Switch to the dark sheet" : "Switch to the light sheet"}
             onClick={toggleTheme}
             style={{
-              marginLeft: "auto", marginBottom: 6,
+              marginBottom: 6,
               display: "flex", alignItems: "center",
               width: 48, height: 24, padding: 2,
               border: "1px solid " + C.line, borderRadius: 999,
@@ -2106,7 +3026,49 @@ export default function RentVsBuy() {
           </button>
         </div>
 
-        {tab === "compare" ? (
+        {undo && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-3 mb-5"
+            style={{
+              background: C.panelAlt, border: "1px solid " + C.line,
+              borderRadius: 4, padding: "10px 14px",
+            }}
+          >
+            <span style={{ fontFamily: SANS, fontSize: 12.5, color: C.ink }}>
+              Switched to <b style={{ fontWeight: 600 }}>{undo.to}</b>. Every tab
+              was reset to {undo.to === "United States" ? "US" : "Canadian"}{" "}
+              defaults; your time period and household carried over.
+            </span>
+            <button
+              type="button"
+              onClick={() => { setRaw(undo.raw); setUndo(null); }}
+              style={{
+                fontFamily: MONO, fontSize: 11, color: C.buy,
+                background: "transparent", border: "1px solid " + C.buy,
+                borderRadius: 3, padding: "4px 9px", cursor: "pointer",
+              }}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={() => setUndo(null)}
+              style={{
+                marginLeft: "auto", fontFamily: MONO, fontSize: 13, color: C.mute,
+                background: "transparent", border: "none", cursor: "pointer",
+                lineHeight: 1, padding: 2,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {tab === "invest" ? (
+          <InvestTab raw={raw} set={set} p={p} iv={iv} />
+        ) : tab === "compare" ? (
           <CompareTab
             raw={raw}
             set={set}
@@ -2154,7 +3116,10 @@ export default function RentVsBuy() {
         {/* HERO — the verdict is the headline */}
         <header className="mb-7">
           <div className="flex items-center justify-between mb-4">
-            <Eyebrow>Rent vs. buy · British Columbia · net worth after costs and taxes</Eyebrow>
+            <Eyebrow>
+              Rent vs. buy · {US ? "United States" : "British Columbia"} · net
+              worth after costs and taxes
+            </Eyebrow>
             <div className="flex items-center gap-2">
             <button
               onClick={copyLink}
@@ -2172,7 +3137,12 @@ export default function RentVsBuy() {
               {copied ? "Link copied" : "Copy link"}
             </button>
             <button
-              onClick={() => { setRaw(DEFAULTS); window.history.replaceState(null, "", window.location.pathname); }}
+              onClick={() => {
+                // Reset to the region you are in, not back to Canada
+                const us = Boolean(raw.us);
+                setRaw({ ...DEFAULTS, ...(us ? REGIONS.us.defaults : {}), us });
+                window.history.replaceState(null, "", window.location.pathname);
+              }}
               style={{
                 fontFamily: MONO,
                 fontSize: 11,
@@ -2266,7 +3236,7 @@ export default function RentVsBuy() {
             />
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid " + C.line }}>
               <SliderRow
-                label="Suite rent"
+                label={US ? "Rental income" : "Suite rent"}
                 value={p.suiteRentMo}
                 onChange={set("suiteRentMo")}
                 min={0}
@@ -2289,6 +3259,8 @@ export default function RentVsBuy() {
                 {p.suiteRentMo > 0
                   ? "Nets " + usd(y1.suite) + "/mo after vacancy and tax, covering " +
                     Math.round((y1.suite / Math.max(1, y1.gross)) * 100) + "% of the cost of owning."
+                  : US
+                  ? "Set to zero — nothing let out, so no rental income and no rental deductions."
                   : "Set to zero — no suite, so no rental income and no rental deductions."}
               </div>
             </div>
@@ -2317,43 +3289,58 @@ export default function RentVsBuy() {
               <Group title="The home">
                 <Field label="Purchase price" prefix="$" step={25000} value={raw.homePrice} onChange={set("homePrice")} hint={"Mortgage " + usd(r.loan)} />
                 <Field label="Down payment" suffix="%" step={1} value={raw.downPct} onChange={set("downPct")} hint={usd(r.down)} />
-                <Field label="Appreciation" suffix="%/yr" step={0.25} value={raw.apprPct} onChange={set("apprPct")} hint="Detached is down ~5% YoY" />
+                <Field label="Appreciation" suffix="%/yr" step={0.25} value={raw.apprPct} onChange={set("apprPct")} hint={US ? "Long-run US average ≈ 3–4%" : "Detached is down ~5% YoY"} />
                 <Field label="Legal, inspection, move" prefix="$" step={500} value={raw.legalFees} onChange={set("legalFees")} />
               </Group>
 
               <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }} className="mb-6">
-                <Eyebrow>Property transfer tax</Eyebrow>
+                <Eyebrow>{US ? "Closing costs" : "Property transfer tax"}</Eyebrow>
                 <div className="flex items-baseline justify-between" style={{ marginTop: 6 }}>
                   <span style={{ fontFamily: SANS, fontSize: 12.5, color: C.mute }}>
-                    1% to $200k, 2% to $2M, 3% above
+                    {US ? "Title, escrow, recording and lender fees"
+                        : "1% to $200k, 2% to $2M, 3% above"}
                   </span>
                   <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600, color: C.rent }}>
                     {usd(r.ptt)}
                   </span>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={raw.firstTime}
-                    onChange={(e) => set("firstTime")(e.target.checked)}
-                    style={{ accentColor: C.buy, width: 14, height: 14 }}
-                  />
-                  <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
-                    First-time buyer exemption
-                  </span>
-                </label>
-                <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 3 }}>
-                  Waives up to $8,000, and only under $860k.
-                </div>
+                {US ? (
+                  <div className="rvb-fields mt-3">
+                    <Field label="As a share of price" suffix="%" step={0.25}
+                           value={raw.usClosingPct} onChange={set("usClosingPct")}
+                           hint="0.5–2% is typical, and varies a lot by state" />
+                  </div>
+                ) : (
+                  <>
+                    <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={raw.firstTime}
+                        onChange={(e) => set("firstTime")(e.target.checked)}
+                        style={{ accentColor: C.buy, width: 14, height: 14 }}
+                      />
+                      <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+                        First-time buyer exemption
+                      </span>
+                    </label>
+                    <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 3 }}>
+                      Waives up to $8,000, and only under $860k.
+                    </div>
+                  </>
+                )}
               </div>
 
               <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }} className="mb-6">
                 <Eyebrow>Where the down payment comes from</Eyebrow>
                 <div style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 4, lineHeight: 1.45 }}>
-                  Registered money is worth less than it looks. Anything left over is treated as
-                  cash savings. FHSA and HBP use the federal first-time test — no home in four
-                  years — which is separate from the BC transfer tax exemption above, so you can
-                  qualify for these at any price.
+                  {US
+                    ? "Selling investments to raise the down payment costs you the tax on the " +
+                      "gains — money the renter keeps working. Filing jointly doubles both the " +
+                      "standard deduction and the §121 exclusion on the eventual sale."
+                    : "Registered money is worth less than it looks. Anything left over is treated as " +
+                      "cash savings. FHSA and HBP use the federal first-time test — no home in four " +
+                      "years — which is separate from the BC transfer tax exemption above, so you can " +
+                      "qualify for these at any price."}
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 8 }}>
                   <input
@@ -2362,11 +3349,17 @@ export default function RentVsBuy() {
                     onChange={(e) => set("couple")(e.target.checked)}
                     style={{ accentColor: C.buy, width: 14, height: 14 }}
                   />
-                  <span style={{ fontFamily: SANS, fontSize: 12.5 }}>Buying with a partner</span>
+                  <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+                    {US ? "Married, filing jointly" : "Buying with a partner"}
+                  </span>
                 </label>
                 <div className="rvb-fields mt-3">
-                  <Field label="From FHSA" prefix="$" step={1000} value={raw.fhsaUse} onChange={set("fhsaUse")} hint={"Tax-free \u00b7 cap " + usd(r.fhsaCap)} />
-                  <Field label="From RRSP (HBP)" prefix="$" step={1000} value={raw.hbpUse} onChange={set("hbpUse")} hint={"Repayable \u00b7 cap " + usd(r.hbpCap)} />
+                  {!US && (
+                    <>
+                      <Field label="From FHSA" prefix="$" step={1000} value={raw.fhsaUse} onChange={set("fhsaUse")} hint={"Tax-free \u00b7 cap " + usd(r.fhsaCap)} />
+                      <Field label="From RRSP (HBP)" prefix="$" step={1000} value={raw.hbpUse} onChange={set("hbpUse")} hint={"Repayable \u00b7 cap " + usd(r.hbpCap)} />
+                    </>
+                  )}
                   <Field label="From cash / savings" prefix="$" step={1000} value={raw.cashSavings} onChange={set("cashSavings")} hint="No tax to use it" />
                   <Field
                     label="From brokerage"
@@ -2454,7 +3447,7 @@ export default function RentVsBuy() {
                     </div>
                   )}
                 </div>
-                {r.overCap && (
+                {r.overCap && !US && (
                   <div style={{ background: C.rentWash, borderRadius: 3, padding: 8, marginTop: 8, fontFamily: SANS, fontSize: 11.5, color: C.rent, lineHeight: 1.4 }}>
                     Over the limit — FHSA caps at {usd(r.fhsaCap)} and the HBP at {usd(r.hbpCap)}
                     {p.couple ? " for a couple" : " per person"}. Capped in the maths.
@@ -2482,12 +3475,24 @@ export default function RentVsBuy() {
                 )}
               </div>
 
-              <Group title="The mortgage" note="Rates compound semi-annually, the Canadian way.">
-                <Field label="Rate, first term" suffix="%" step={0.05} value={raw.rate} onChange={set("rate")} hint="5-yr fixed ≈ 4.24%" />
-                <Field label="Rate at renewal" suffix="%" step={0.05} value={raw.renewalRate} onChange={set("renewalRate")} hint="The big unknown" />
-                <Field label="Term" suffix="yr" step={1} value={raw.termYears} onChange={set("termYears")} hint="Rate is locked this long" />
-                <Field label="Amortization" suffix="yr" step={5} value={raw.amortYears} onChange={set("amortYears")} hint="25 unless first-time" />
-                <Field label="Cost to sell" suffix="%" step={0.25} value={raw.sellCostPct} onChange={set("sellCostPct")} hint="7% first $100k, 2.5% after" />
+              <Group
+                title="The mortgage"
+                note={US
+                  ? "A 30-year fixed: one rate for the life of the loan, compounded monthly."
+                  : "Rates compound semi-annually, the Canadian way."}
+              >
+                <Field label={US ? "Rate" : "Rate, first term"} suffix="%" step={0.05} value={raw.rate} onChange={set("rate")} hint={US ? "30-yr fixed ≈ 6.5%" : "5-yr fixed ≈ 4.24%"} />
+                {!US && (
+                  <>
+                    <Field label="Rate at renewal" suffix="%" step={0.05} value={raw.renewalRate} onChange={set("renewalRate")} hint="The big unknown" />
+                    <Field label="Term" suffix="yr" step={1} value={raw.termYears} onChange={set("termYears")} hint="Rate is locked this long" />
+                  </>
+                )}
+                <Field label="Amortization" suffix="yr" step={5} value={raw.amortYears} onChange={set("amortYears")} hint={US ? "30 is standard" : "25 unless first-time"} />
+                {US && (
+                  <Field label="PMI" suffix="%/yr" step={0.05} value={raw.pmiPct} onChange={set("pmiPct")} hint="Of the balance, until 78% LTV. None at 20% down" />
+                )}
+                <Field label="Cost to sell" suffix="%" step={0.25} value={raw.sellCostPct} onChange={set("sellCostPct")} hint={US ? "5–6% all in, agent included" : "7% first $100k, 2.5% after"} />
               </Group>
 
               {r.premium > 0 && (
@@ -2503,10 +3508,32 @@ export default function RentVsBuy() {
                   </div>
                 </div>
               )}
+              {US && r.totPMI > 0.5 && (
+                <div style={{ background: C.panelAlt, borderRadius: 3, padding: 10, marginTop: -8 }} className="mb-6">
+                  <Eyebrow>Mortgage insurance</Eyebrow>
+                  <div className="flex items-baseline justify-between" style={{ marginTop: 4 }}>
+                    <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>
+                      {r.pmiEndsMonth
+                        ? "Drops off in year " + Math.ceil(r.pmiEndsMonth / 12)
+                        : "Still running at the horizon"}
+                    </span>
+                    <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 600 }}>
+                      {usd(r.totPMI)}
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 4, lineHeight: 1.4 }}>
+                    Cancels automatically at 78% of the original price, not of
+                    what the home is worth by then — so appreciation does not
+                    get you out of it early. It is not deductible.
+                  </div>
+                </div>
+              )}
               {r.belowMin && (
                 <div style={{ background: C.rentWash, borderRadius: 3, padding: 10, marginTop: -8 }} className="mb-6">
                   <div style={{ fontFamily: SANS, fontSize: 12, color: C.rent, lineHeight: 1.4 }}>
-                    {r.insurable
+                    {US
+                      ? "Below 3% down, which is the floor on a conventional loan. You need at least " + usd(r.minDown) + "."
+                      : r.insurable
                       ? "Below the legal minimum. You need at least " + usd(r.minDown) + " down — 5% of the first $500k, 10% of the rest."
                       : "Homes at $1.5M and up can't be insured. You need 20% down, or " + usd(r.minDown) + "."}
                   </div>
@@ -2514,11 +3541,11 @@ export default function RentVsBuy() {
               )}
 
               <Group title="Owning costs">
-                <Field label="Property tax" suffix="%/yr" step={0.01} value={raw.propTaxPct} onChange={set("propTaxPct")} hint="Metro Vancouver ≈ 0.3–0.4%" />
+                <Field label="Property tax" suffix="%/yr" step={0.01} value={raw.propTaxPct} onChange={set("propTaxPct")} hint={US ? "1.1% national median; 2%+ in TX and NJ" : "Metro Vancouver ≈ 0.3–0.4%"} />
                 <Field label="Home insurance" prefix="$" suffix="/yr" step={100} value={raw.insYr} onChange={set("insYr")} />
                 <Field label="Maintenance" prefix="$" suffix="/yr" step={500} value={raw.maintYr} onChange={set("maintYr")} hint="Roof, furnace, repairs" />
                 <Field label="City utilities" prefix="$" suffix="/yr" step={100} value={raw.utilYr} onChange={set("utilYr")} hint="Water, sewer, garbage" />
-                <Field label="Strata fee" prefix="$" suffix="/mo" step={25} value={raw.strataMo} onChange={set("strataMo")} hint="0 for detached" />
+                <Field label={US ? "HOA dues" : "Strata fee"} prefix="$" suffix="/mo" step={25} value={raw.strataMo} onChange={set("strataMo")} hint={US ? "0 if there's no association" : "0 for detached"} />
                 <Field label="Remodelling budget" prefix="$" step={5000} value={raw.remodelCost} onChange={set("remodelCost")} hint={p.remodelCost > 0 ? usd(r.remodelMo) + "/mo while it runs" : "0 if move-in ready"} />
                 {p.remodelCost > 0 && (
                   <>
@@ -2534,32 +3561,67 @@ export default function RentVsBuy() {
                   </>
                 )}
               </Group>
-              <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: -12 }}>
-                <input
-                  type="checkbox"
-                  checked={raw.hog}
-                  onChange={(e) => set("hog")(e.target.checked)}
-                  style={{ accentColor: C.buy, width: 14, height: 14 }}
-                />
-                <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
-                  Claim the Home Owner Grant
-                </span>
-              </label>
-              <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 3, marginBottom: 20 }}>
-                $570 off your tax bill, phasing out above $2.075M assessed.
-              </div>
+              {!US && (
+                <>
+                  <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: -12 }}>
+                    <input
+                      type="checkbox"
+                      checked={raw.hog}
+                      onChange={(e) => set("hog")(e.target.checked)}
+                      style={{ accentColor: C.buy, width: 14, height: 14 }}
+                    />
+                    <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+                      Claim the Home Owner Grant
+                    </span>
+                  </label>
+                  <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 3, marginBottom: 20 }}>
+                    $570 off your tax bill, phasing out above $2.075M assessed.
+                  </div>
+                </>
+              )}
+
+              {/* The US deduction is worth nothing at all for most buyers, and
+                  the only honest way to show that is to compute both sides. */}
+              {US && (
+                <Group
+                  title="Federal and state tax"
+                  note="Both sides are compared against the standard deduction, which is why the mortgage deduction is often worth exactly nothing."
+                >
+                  <Field label="Household income" prefix="$" step={10000} value={raw.usIncome} onChange={set("usIncome")} hint="Sets the passive-loss allowance on rentals" />
+                  <Field label="State income tax" suffix="%" step={0.5} value={raw.usStateTaxPct} onChange={set("usStateTaxPct")} hint="0 in TX, FL, WA, NV, TN" />
+                  <Field label="Standard deduction" prefix="$" step={500} value={raw.usStdDed} onChange={set("usStdDed")} hint={p.couple ? "Doubled to " + usd(p.usStdDed * 2) + " filing jointly" : "Single filer"} />
+                </Group>
+              )}
+              {US && (
+                <div style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: -12, marginBottom: 20, lineHeight: 1.45 }}>
+                  {r.totTaxBenefit > 0.5
+                    ? "Itemizing beats the standard deduction, and the mortgage is worth " +
+                      usd(r.totTaxBenefit) + " over " + p.horizonYears + " years. " +
+                      "Interest is capped at the first $750,000 of the loan and " +
+                      "state and property tax together at $10,000."
+                    : "At this price the mortgage interest deduction is worth nothing: " +
+                      "you would take the standard deduction either way, so owning buys " +
+                      "you no deduction a renter doesn't already have. That is the case " +
+                      "for most buyers since 2018, and most calculators get it wrong."}
+                </div>
+              )}
 
               <Group title="Renting">
-                <Field label="Rent today" prefix="$" suffix="/mo" step={50} value={raw.rentMo} onChange={set("rentMo")} hint="3-bed, Metro Vancouver" />
-                <Field label="Increase while you stay" suffix="%/yr" step={0.1} value={raw.rentGrowthPct} onChange={set("rentGrowthPct")} hint="BC caps it: 2.3% in 2026" />
+                <Field label="Rent today" prefix="$" suffix="/mo" step={50} value={raw.rentMo} onChange={set("rentMo")} hint={US ? "Whatever the same house rents for" : "3-bed, Metro Vancouver"} />
+                <Field label="Increase while you stay" suffix="%/yr" step={0.1} value={raw.rentGrowthPct} onChange={set("rentGrowthPct")} hint={US ? "Uncapped in most states" : "BC caps it: 2.3% in 2026"} />
                 <Field label="Market rent growth" suffix="%/yr" step={0.25} value={raw.marketRentGrowthPct} onChange={set("marketRentGrowthPct")} hint="What you'd re-rent at" />
                 <Field label="You move every" suffix="yr" step={1} value={raw.moveEveryYears} onChange={set("moveEveryYears")} hint="0 if you never move" />
                 <Field label="Cost of a move" prefix="$" step={250} value={raw.moveCost} onChange={set("moveCost")} />
                 <Field label="Tenant insurance" prefix="$" suffix="/mo" step={5} value={raw.rentInsMo} onChange={set("rentInsMo")} />
               </Group>
 
-              <Group title="Mortgage helper" note="The suite downstairs. Set the rent to zero if there isn't one.">
-                <Field label="Suite rent" prefix="$" suffix="/mo" step={50} value={raw.suiteRentMo} onChange={set("suiteRentMo")} hint={p.suiteRentMo > 0 ? "2-bed \u2248 $1,900" : "No suite"} />
+              <Group
+                title={US ? "Rental income" : "Mortgage helper"}
+                note={US
+                  ? "An ADU, a basement apartment or a room let out. Zero if there isn't one."
+                  : "The suite downstairs. Set the rent to zero if there isn't one."}
+              >
+                <Field label={US ? "Rent from it" : "Suite rent"} prefix="$" suffix="/mo" step={50} value={raw.suiteRentMo} onChange={set("suiteRentMo")} hint={p.suiteRentMo > 0 ? (US ? "1-bed ADU \u2248 $1,200" : "2-bed \u2248 $1,900") : "None"} />
                 {p.suiteRentMo > 0 && (
                   <>
                     <Field label="Suite rent increase" suffix="%/yr" step={0.25} value={raw.suiteGrowthPct} onChange={set("suiteGrowthPct")} hint="Resets on turnover" />
@@ -2577,8 +3639,8 @@ export default function RentVsBuy() {
 
               <Group title="Your money" note="What the cash does when it isn't in a house.">
                 <Field label="Investment return" suffix="%/yr" step={0.5} value={raw.investPct} onChange={set("investPct")} />
-                <Field label="Your marginal tax rate" suffix="%" step={1} value={raw.marginalTaxPct} onChange={set("marginalTaxPct")} hint={p.suiteRentMo > 0 ? "Suite income + RRSP" : "Values RRSP/FHSA money"} />
-                <Field label="Tax on gains" suffix="%" step={1} value={raw.capGainsPct} onChange={set("capGainsPct")} hint="0 inside a TFSA" />
+                <Field label="Your marginal tax rate" suffix="%" step={1} value={raw.marginalTaxPct} onChange={set("marginalTaxPct")} hint={US ? "Federal bracket, for the deduction and rental income" : p.suiteRentMo > 0 ? "Suite income + RRSP" : "Values RRSP/FHSA money"} />
+                <Field label="Tax on gains" suffix="%" step={1} value={raw.capGainsPct} onChange={set("capGainsPct")} hint={US ? "15% long-term for most; 0 inside a Roth" : "0 inside a TFSA"} />
                 <Field label="Fees & tax drag" suffix="%/yr" step={0.1} value={raw.feeDragPct} onChange={set("feeDragPct")} hint="MER + tax on payouts" />
                 <Field label="Inflation" suffix="%/yr" step={0.25} value={raw.inflPct} onChange={set("inflPct")} />
               </Group>
@@ -2809,7 +3871,8 @@ export default function RentVsBuy() {
                 </div>
 
                 <Row label="Down payment" value={usd(r.down)} />
-                <Row label="Property transfer tax" value={usd(r.ptt)} tone={C.rent} />
+                <Row label={US ? "Title, escrow and lender fees" : "Property transfer tax"}
+                     value={usd(r.ptt)} tone={C.rent} />
                 <Row label="Legal, inspection, move" value={usd(r.legalFees)} />
                 <Row label="Cash needed at closing" value={usd(r.cashToClose)} strong />
                 {r.saleTax > 0 && (
@@ -2828,6 +3891,29 @@ export default function RentVsBuy() {
                 )}
                 {r.premium > 0 && (
                   <Row label={"CMHC premium, " + r.premiumPct + "% financed"} value={usd(r.premium)} tone={C.rent} />
+                )}
+                {r.totPMI > 0.5 && (
+                  <Row
+                    label={r.pmiEndsMonth
+                      ? "PMI, until it cancels in year " + Math.ceil(r.pmiEndsMonth / 12)
+                      : "PMI over " + p.horizonYears + " years"}
+                    value={usd(r.totPMI)}
+                    tone={C.rent}
+                  />
+                )}
+                {US && (
+                  <Row
+                    label={"Mortgage interest deduction, " + p.horizonYears + " years"}
+                    value={usd(r.totTaxBenefit)}
+                    tone={r.totTaxBenefit > 0.5 ? C.buy : C.mute}
+                  />
+                )}
+                {US && r.gainTaxEnd > 0.5 && (
+                  <Row
+                    label={"Tax on the gain above the §121 exclusion"}
+                    value={usd(r.gainTaxEnd)}
+                    tone={C.rent}
+                  />
                 )}
                 {r.renewalPayment !== null && (
                   <Row
@@ -2955,15 +4041,27 @@ export default function RentVsBuy() {
                 {[
                   ["You're not comparing like with like", "A detached house with a yard and a suite is more home than a 3-bed rental. Some of the gap is consumption, not investment."],
                   ...(p.suiteRentMo > 0
-                    ? [
+                    ? US
+                      ? [
+                          ["The ADU has to exist and be legal", "Building one runs $100\u2013250k, raises your insurance, and zoning still forbids it across much of the country."],
+                          ["Renting part of your home splits the \u00a7121 exclusion", "The rented share is not a principal residence, and depreciation on it is recaptured whether or not you ever claimed it."],
+                        ]
+                      : [
                         ["The suite has to exist and be legal", "Building or legalising one runs $80\u2013150k, raises your insurance, and needs a city licence."],
                         ["Claiming CCA can cost you", "Depreciating the rental portion can forfeit part of your principal-residence exemption. Most accountants say don't."],
                       ]
                     : [["No suite means no cushion", "A mortgage helper is usually the difference between owning working and not. Move the suite slider to see what one would be worth."]]),
                   ["Leverage cuts both ways", "A steady 3% hides the fact that 20% down is 5x leverage. A 15% drop erases three quarters of your down payment."],
                   ["The renter has to actually invest", "The whole case for renting assumes the monthly difference goes into the market every month, for years, untouched."],
-                  ["Rate risk is real, not theoretical", "Renewal is modelled, but a job loss at renewal, or failing the stress test, isn't."],
-                  ["Big lumpy costs", "Special assessments, a roof, earthquake coverage — commonly excluded in BC — and floodplain exposure near the rivers."],
+                  US
+                    ? ["The 30-year fixed is worth more than it looks", "Your payment is frozen for thirty years while rents are not. That is real insurance, and none of its value shows up in the number above."]
+                    : ["Rate risk is real, not theoretical", "Renewal is modelled, but a job loss at renewal, or failing the stress test, isn't."],
+                  US
+                    ? ["Big lumpy costs", "Special assessments, a roof, and whatever the policy leaves out — flood and earthquake are almost always separate, and premiums are rising fast in exposed states."]
+                    : ["Big lumpy costs", "Special assessments, a roof, earthquake coverage — commonly excluded in BC — and floodplain exposure near the rivers."],
+                  ...(US
+                    ? [["Property tax is not really a flat percentage", "Reassessment rules, local levies and caps like California's Prop 13 make the real path very different from a fixed rate on a rising value."]]
+                    : []),
                   ["Life doesn't hold still", "The breakeven year assumes you stay. Job moves, kids, and separations don't wait for it."],
                 ].map(([t, d]) => (
                   <div key={t} style={{ padding: "8px 0", borderBottom: "1px dotted " + C.line }}>
@@ -2973,8 +4071,12 @@ export default function RentVsBuy() {
                 ))}
               </div>
               <div style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, lineHeight: 1.5, marginTop: 12 }}>
-                First-time buyers also have the FHSA and Home Buyers' Plan, worth up to $40k of
-                deductions and a $60k RRSP withdrawal — money you only get if you buy. Not modelled here.
+                {US
+                  ? "State and local programmes — first-time buyer credits, homestead exemptions, " +
+                    "assessment caps — vary enormously and are not modelled. Nor are points paid " +
+                    "to buy the rate down, or a refinance if rates fall."
+                  : "First-time buyers also have the FHSA and Home Buyers' Plan, worth up to $40k of " +
+                    "deductions and a $60k RRSP withdrawal — money you only get if you buy. Not modelled here."}
               </div>
             </Panel>
 
@@ -3086,23 +4188,54 @@ export default function RentVsBuy() {
               }}
             >
               Assumptions: you sell at the end of the period and pay selling costs, and the
-              renter pays tax on investment gains — set that to 0 if the money sits in a TFSA.
-              A principal residence is exempt from capital gains tax in Canada, so no tax is
-              charged on the home's gain, and there is no mortgage interest deduction here the
-              way there is in the US. Your rate is fixed only for the term; after that
-              everything renews at the renewal rate. The CMHC premium is financed into the
-              mortgage, so you pay interest on it. Property tax follows the home's assessed
+              renter pays tax on investment gains — set that to 0 if the money sits in a{" "}
+              {US ? "Roth" : "TFSA"}.{" "}
+              {US ? (
+                <>
+                  The §121 exclusion covers the first {usd(p.couple ? 500000 : 250000)} of the
+                  home's gain once you have owned and lived in it two of the last five years,
+                  and anything above that is taxed at your capital gains rate — which is why
+                  the answer jumps at the two-year mark. Mortgage interest and property tax
+                  are deducted only when itemizing beats the standard deduction, and that
+                  comparison is made for the renter too, so the calculator credits owning only
+                  with the deduction a renter would not already have had. Interest is limited
+                  to the first $750,000 of acquisition debt using the average-balance method,
+                  and state plus property tax together are capped at $10,000. PMI is charged
+                  monthly on the opening balance, is not deductible, and cancels at 78% of the
+                  original purchase price — not of the appreciated value. The rate is fixed
+                  for the life of the loan and there is no prepayment penalty, so selling
+                  early costs nothing beyond the selling costs.
+                </>
+              ) : (
+                <>
+                  A principal residence is exempt from capital gains tax in Canada, so no tax is
+                  charged on the home's gain, and there is no mortgage interest deduction here the
+                  way there is in the US. Your rate is fixed only for the term; after that
+                  everything renews at the renewal rate. The CMHC premium is financed into the
+                  mortgage, so you pay interest on it.
+                </>
+              )}{" "}
+              Property tax follows the home's assessed
               value, which is assumed to track market value. Remodelling cost is spread evenly
               over your chosen period, and the value it adds lands on the home as the work
               completes, at your chosen recovery rate, then appreciates with the house. It
               does not change the suite's rent — raise that yourself if the reno is what
-              creates the suite. RRSP and FHSA money is valued
-              after tax at your marginal rate on both sides, since a renter eventually withdraws
-              it and an FHSA that never buys a home rolls into an RRSP; HBP repayments go back
-              into the RRSP and compound there at the same market return. If the suite's deductions exceed
+              creates the suite.{" "}
+              {!US && (
+                <>
+                  RRSP and FHSA money is valued
+                  after tax at your marginal rate on both sides, since a renter eventually withdraws
+                  it and an FHSA that never buys a home rolls into an RRSP; HBP repayments go back
+                  into the RRSP and compound there at the same market return.{" "}
+                </>
+              )}
+              If the suite's deductions exceed
               its rent the loss is treated as zero, though in practice it can offset other income. Maintenance, insurance, utilities
-              and strata fees grow with inflation. GST applies to new builds only and is not
-              included. Everything is in nominal dollars. This is a model, not advice.
+              and {US ? "HOA dues" : "strata fees"} grow with inflation.{" "}
+              {US
+                ? "State and local transfer taxes, points, and any refinance are not modelled."
+                : "GST applies to new builds only and is not included."}{" "}
+              Everything is in nominal dollars. This is a model, not advice.
             </p>
             <p
               style={{

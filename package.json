@@ -2,7 +2,7 @@
   "name": "rent-vs-buy",
   "version": "1.3.0",
   "private": true,
-  "description": "Rent vs buy calculator for Metro Vancouver and the Lower Mainland",
+  "description": "Rent vs buy calculator for Canada and the United States, with an investment property model",
   "scripts": {
     "build": "./build.sh",
     "serve": "npx --yes serve dist -l 8099"

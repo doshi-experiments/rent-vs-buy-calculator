@@ -1,7 +1,7 @@
 {
   "name": "Rent vs Buy — British Columbia",
   "short_name": "Rent vs Buy",
-  "description": "Rent versus buy for British Columbia, with mortgage helper income, transfer tax, CMHC and an appreciation calculator.",
+  "description": "Rent versus buy for Canada and the United States, with an investment property model, mortgage helper income, and an appreciation calculator.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
