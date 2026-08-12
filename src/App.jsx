@@ -987,14 +987,99 @@ function Segmented({ options, value, onChange }) {
   );
 }
 
+/* A small "what does this mean" affordance. Positioned with `fixed` from a
+ * measured rect rather than absolutely inside its parent: the fields sit in a
+ * narrow two-column sidebar, and an absolutely-positioned bubble there runs
+ * off the right of the screen. Opens on hover for a mouse, on tap or focus
+ * for everything else, and closes on Escape or a click elsewhere. */
+function Info({ text, label }) {
+  const [pos, setPos] = useState(null);
+  const ref = React.useRef(null);
+  const W = 260;
+
+  const place = () => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - W / 2),
+                          Math.max(8, window.innerWidth - W - 8));
+    // Above by default; below when there is not room for it up there.
+    setPos(r.top < 150
+      ? { left, top: r.bottom + 8 }
+      : { left, bottom: window.innerHeight - r.top + 8 });
+  };
+  const close = () => setPos(null);
+
+  React.useEffect(() => {
+    if (!pos) return;
+    const onKey = (e) => e.key === "Escape" && close();
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [pos]);
+
+  return (
+    <span
+      ref={ref}
+      style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
+      onMouseEnter={place}
+      onMouseLeave={close}
+    >
+      <button
+        type="button"
+        aria-label={label ? "What " + label + " means" : "More information"}
+        aria-expanded={!!pos}
+        // Inside a <label>, a click would otherwise be forwarded to the input.
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); pos ? close() : place(); }}
+        onFocus={place}
+        onBlur={close}
+        style={{
+          display: "grid", placeItems: "center",
+          width: 14, height: 14, flexShrink: 0,
+          borderRadius: "50%", border: "1px solid " + C.line,
+          background: pos ? C.buy : "transparent",
+          color: pos ? C.onBuy : C.mute,
+          fontFamily: SERIF, fontSize: 10, fontStyle: "italic", fontWeight: 600,
+          lineHeight: 1, padding: 0, cursor: "help",
+        }}
+      >
+        i
+      </button>
+      {pos && (
+        <span
+          role="tooltip"
+          style={{
+            position: "fixed", zIndex: 60, width: W,
+            left: pos.left, top: pos.top, bottom: pos.bottom,
+            background: C.field, color: C.ink,
+            border: "1px solid " + C.line, borderRadius: 4,
+            boxShadow: "0 6px 20px rgba(0,0,0,.22)",
+            padding: "9px 11px",
+            fontFamily: SANS, fontSize: 11.5, lineHeight: 1.45,
+            fontWeight: 400, letterSpacing: 0, textTransform: "none",
+            whiteSpace: "normal", textAlign: "left",
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function Eyebrow({ children, tone }) {
   return (
     <div
       style={{
         fontFamily: MONO,
         fontSize: 10.5,
-        letterSpacing: "0.14em",
-        textTransform: "uppercase",
+        letterSpacing: "0.04em",
         color: tone || C.mute,
         fontWeight: 500,
       }}
@@ -1004,7 +1089,7 @@ function Eyebrow({ children, tone }) {
   );
 }
 
-function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, readOnly }) {
+function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, readOnly, tip }) {
   // Says so when characters were dropped, rather than silently changing the
   // number under the user — a stray letter in a pasted figure would
   // otherwise become a different, plausible-looking value.
@@ -1042,7 +1127,10 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, 
         className="flex items-baseline justify-between"
         style={{ marginBottom: 4, gap: 6 }}
       >
-        <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>{label}</span>
+        <span className="flex items-center" style={{ gap: 5, minWidth: 0 }}>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>{label}</span>
+          {tip && <Info text={tip} label={label} />}
+        </span>
         {badge}
       </span>
       <span
@@ -1168,10 +1256,13 @@ function SliderRow({ label, value, onChange, min, max, step, accent, suffix, pre
   );
 }
 
-function Group({ title, children, note }) {
+function Group({ title, children, note, tip }) {
   return (
     <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }} className="mb-6">
-      <Eyebrow>{title}</Eyebrow>
+      <Eyebrow>
+        {title}
+        {tip && <> <Info text={tip} label={title} /></>}
+      </Eyebrow>
       {note && (
         <div
           style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 4 }}
@@ -1200,14 +1291,17 @@ function Panel({ children, className }) {
   );
 }
 
-function Row({ label, value, tone, strong }) {
+function Row({ label, value, tone, strong, tip }) {
   return (
     <div
       className="flex items-baseline justify-between"
-      style={{ padding: "5px 0", borderBottom: "1px dotted " + C.line }}
+      style={{ padding: "5px 0", borderBottom: "1px dotted " + C.line, gap: 10 }}
     >
-      <span style={{ fontFamily: SANS, fontSize: 12.5, color: strong ? C.ink : C.mute }}>
-        {label}
+      <span className="flex items-center" style={{ gap: 5, minWidth: 0 }}>
+        <span style={{ fontFamily: SANS, fontSize: 12.5, color: strong ? C.ink : C.mute }}>
+          {label}
+        </span>
+        {tip && <Info text={tip} label={label} />}
       </span>
       <span
         style={{
@@ -1772,7 +1866,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
     ["Cash to close", a.cashToClose, b.cashToClose, usd],
     ["Left invested, day one", pa.keepInvested, pb.keepInvested, usd],
     ["Mortgage", a.loan, b.loan, usd],
-    ["Payment (P&I)", a.payment, b.payment, perMo],
+    ["Mortgage payment", a.payment, b.payment, perMo],
     ["Property tax", mo(a, "propTax"), mo(b, "propTax"), perMo],
     ["Maintenance", mo(a, "maint"), mo(b, "maint"), perMo],
     [us ? "HOA dues" : "Strata", mo(a, "strata"), mo(b, "strata"), perMo, false, true],
@@ -1820,8 +1914,8 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
               borderRadius: 3, padding: "12px 14px",
               background: winner === id ? C.panelAlt : "transparent",
             }}>
-              <div style={{ fontFamily: SANS, fontSize: 11, color: C.mute, letterSpacing: ".04em" }}>
-                PROPERTY {id} · {usd(id === "A" ? pa.homePrice : pb.homePrice)}
+              <div style={{ fontFamily: SANS, fontSize: 11, color: C.mute }}>
+                Property {id} · {usd(id === "A" ? pa.homePrice : pb.homePrice)}
               </div>
               <div style={{
                 fontFamily: MONO, fontSize: 22, fontWeight: 600, marginTop: 4,
@@ -2049,10 +2143,13 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
  * ------------------------------------------------------------------ */
 
 // One metric, stated plainly, with the sentence that says how to read it.
-function Metric({ label, value, tone, note }) {
+function Metric({ label, value, tone, note, tip }) {
   return (
     <div style={{ borderLeft: "3px solid " + (tone || C.line), paddingLeft: 10 }}>
-      <Eyebrow>{label}</Eyebrow>
+      <Eyebrow>
+        {label}
+        {tip && <> <Info text={tip} label={label} /></>}
+      </Eyebrow>
       <div style={{ fontFamily: MONO, fontSize: 20, fontWeight: 600, marginTop: 3, color: tone || C.ink }}>
         {value}
       </div>
@@ -2065,13 +2162,29 @@ function Metric({ label, value, tone, note }) {
   );
 }
 
-function InvestTab({ raw, set, p, iv }) {
+function InvestTab({ raw, set, setRaw, p, iv }) {
   const us = !!p.us;
   const units = iv.unitCount;
   const same = !!p.ivSameRent;
   const adv = Math.round(iv.advantage);
   const ahead = adv >= 0;
   const cf = iv.monthlyCFAfterTax;
+
+  /* Typing a different figure into a unit that is currently following unit 1
+   * is a perfectly reasonable thing to want, so take it: drop the toggle and
+   * keep every unit showing exactly what it was already showing. Only the
+   * units on screen are written — hidden slots keep their own figures for if
+   * the count goes back up. Editing unit 1 itself is not a break: unit 1 is
+   * the source, and changing it is what the toggle is for. */
+  const editUnit = (idx) => (v) => {
+    if (!same || idx === 0) return set(IV_UNITS[idx])(v);
+    setRaw((st) => {
+      const next = { ...st, ivSameRent: false };
+      for (let k = 0; k < units; k++) next[IV_UNITS[k]] = st.ivU1;
+      next[IV_UNITS[idx]] = v;
+      return next;
+    });
+  };
 
   const be =
     iv.breakeven === null
@@ -2089,7 +2202,7 @@ function InvestTab({ raw, set, p, iv }) {
     ["Effective gross income", y.egi, true],
     ["Operating expenses", -y.opex, false],
     ["Net operating income", y.noi, true],
-    ["Mortgage (P&I)", -y.debtService, false],
+    ["Mortgage payment", -y.debtService, false],
     ["Cash flow before tax", y.noi - y.debtService, true],
     ["Income tax", -y.tax, false],
     ["Cash flow after tax", y.noi - y.debtService - y.tax, true],
@@ -2101,7 +2214,7 @@ function InvestTab({ raw, set, p, iv }) {
       <Panel className="mb-5">
         <Eyebrow>
           Investment property · {us ? "United States" : "British Columbia"} ·
-          {" "}buy and rent out
+          {" "}Buy and rent out
         </Eyebrow>
         <h1 style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
           {ahead ? "This property beats" : "This property trails"} the market by{" "}
@@ -2119,18 +2232,23 @@ function InvestTab({ raw, set, p, iv }) {
         </p>
 
         <div className="rvb-metrics mt-5">
-          <Metric label="Cap rate" value={trim(iv.capRate) + "%"} tone={C.buy}
-                  note="Year-one NOI over price plus up-front work — the return with no mortgage in it" />
-          <Metric label="Cash on cash" value={trim(iv.cashOnCash) + "%"}
+          <Metric label="Return on the property" value={trim(iv.capRate) + "%"} tone={C.buy}
+                  note="What the building itself earns, before any mortgage"
+                  tip="Known in the trade as the cap rate: first-year net operating income divided by the price plus any up-front work. It ignores how you paid for the place, which is what makes it comparable between one deal and the next." />
+          <Metric label="Return on your cash" value={trim(iv.cashOnCash) + "%"}
                   tone={iv.cashOnCash >= 0 ? C.buy : C.rent}
-                  note={"Pre-tax cash flow over the " + usd(iv.cashToClose) + " you put in"} />
-          <Metric label="DSCR"
-                  value={isFinite(iv.dscr) ? iv.dscr.toFixed(2) : "—"}
+                  note={"First-year cash flow against the " + usd(iv.cashToClose) + " you put in"}
+                  tip="Known as cash-on-cash. Unlike the return on the property, this one does count the mortgage — so it can be strongly negative on a place that is perfectly sound but heavily borrowed against." />
+          <Metric label="Rent against the mortgage"
+                  value={isFinite(iv.dscr) ? iv.dscr.toFixed(2) + "\u00d7" : "—"}
                   tone={iv.dscr >= 1.2 ? C.buy : iv.dscr >= 1 ? C.signal : C.rent}
-                  note="NOI over the mortgage payment. Most lenders want 1.20 or better" />
-          <Metric label="Cash flow" value={usd(cf) + "/mo"}
+                  note="Above 1.00 and the rent covers the payment on its own"
+                  tip="The debt service coverage ratio, or DSCR: net operating income divided by the mortgage payment. Lenders writing investment mortgages usually want 1.20 or better, meaning the rent covers the payment with 20% to spare." />
+          <Metric label="Monthly cash flow" value={usd(cf) + "/mo"}
                   tone={cf >= 0 ? C.buy : C.rent}
-                  note={cf >= 0 ? "After the mortgage and tax" : "You feed the property this every month"} />
+                  note={cf >= 0 ? "What lands in your account, after the mortgage and tax"
+                                : "What you pay in every month, after the mortgage and tax"}
+                  tip="Rent collected, less operating costs, less the mortgage payment, less income tax. This is the number that decides whether you can actually hold the property, as opposed to whether it is a good investment." />
         </div>
 
         <div style={{ marginTop: 18, borderTop: "1px solid " + C.line, paddingTop: 14 }}>
@@ -2143,7 +2261,7 @@ function InvestTab({ raw, set, p, iv }) {
           <div style={{ marginTop: 14, padding: "9px 12px", borderRadius: 3,
                         background: C.rentWash, fontFamily: SANS, fontSize: 11.5, color: C.rent }}>
             Net operating income does not cover the mortgage
-            (DSCR {isFinite(iv.dscr) ? iv.dscr.toFixed(2) : "—"}). Most lenders
+            (it covers {isFinite(iv.dscr) ? iv.dscr.toFixed(2) : "—"}× of it). Most lenders
             will not write this loan as an investment mortgage, and it needs
             {" "}{usd(-iv.monthlyCF)} a month out of your pocket before tax.
           </div>
@@ -2178,23 +2296,26 @@ function InvestTab({ raw, set, p, iv }) {
           </label>
         </div>
 
-        <div className="rvb-fields">
+        <div className="rvb-units">
           {IV_UNITS.slice(0, units).map((k, idx) => (
             <Field
               key={k}
-              label={"Unit " + (idx + 1) + (idx === 0 && same ? " · all units" : "")}
+              label={"Unit " + (idx + 1) + (idx === 0 && same ? " · and every other unit" : "")}
               prefix="$" suffix="/mo" step={50}
               value={same && idx > 0 ? raw.ivU1 : raw[k]}
-              onChange={set(k)}
-              readOnly={same && idx > 0}
-              hint={same && idx > 0 ? "Following unit 1" : undefined}
+              onChange={editUnit(idx)}
+              hint={same && idx > 0
+                ? "Following unit 1 — type here to price it separately"
+                : undefined}
             />
           ))}
         </div>
         {same && units > 1 && (
           <p style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 8 }}>
-            Unit 1's rent is being applied to all {units}. Your per-unit figures
-            are kept — switch this off and they come back exactly as they were.
+            Unit 1's rent is being applied to all {units}. Untick the box and
+            your original per-unit figures come back exactly as they were; type
+            over any unit instead and it keeps what is on screen, with that one
+            unit set to whatever you typed.
           </p>
         )}
       </Panel>
@@ -2208,26 +2329,32 @@ function InvestTab({ raw, set, p, iv }) {
                    value={raw.ivPrice} onChange={set("ivPrice")} />
             <Field label="Down payment" suffix="%" step={5}
                    value={raw.ivDownPct} onChange={set("ivDownPct")}
-                   hint={usd(iv.down) + " · " + (us ? "20–25% is typical" : "20% minimum on a rental")} />
+                   hint={usd(iv.down) + " · " + (us ? "20–25% is typical" : "20% minimum on a rental")}
+                   tip="Rentals cannot be insured in either country, so there is no low-down-payment option the way there is on a home you live in." />
             <Field label="Mortgage rate" suffix="%" step={0.25}
                    value={raw.ivRate} onChange={set("ivRate")}
-                   hint="Investor rates run 50–100bp above owner-occupied" />
-            <Field label="Amortization" suffix="yr" step={5}
-                   value={raw.ivAmort} onChange={set("ivAmort")} />
+                   tip="Set separately from the rate on the first tab, because lenders price investment mortgages roughly half a point to a full point above the rate on a home you live in." />
+            <Field label="Years to pay it off" suffix="yr" step={5}
+                   value={raw.ivAmort} onChange={set("ivAmort")}
+                   tip="The amortization: how long the mortgage takes to reach zero. Stretching it lowers the payment and improves cash flow, at the cost of far more interest over the life of the loan." />
             <Field label="Appreciation" suffix="%/yr" step={0.5}
-                   value={raw.ivApprPct} onChange={set("ivApprPct")} />
-            <Field label="Up-front work" prefix="$" step={5000}
+                   value={raw.ivApprPct} onChange={set("ivApprPct")}
+                   tip="How fast you expect the property itself to gain value. This is a guess about the future rather than a fact about the present, and over a long horizon it drives the result more than the rent does." />
+            <Field label="Work before the first tenant" prefix="$" step={5000}
                    value={raw.ivInitialCapex} onChange={set("ivInitialCapex")}
-                   hint="Spent before the first tenant. Adds to your basis" />
+                   tip="Paint, appliances, permits, anything the place needs before it can be let. It comes out of your pocket at closing and it raises your cost base, so it reduces the taxable gain when you eventually sell." />
           </div>
           <div className="mt-4">
             <Row label="Mortgage" value={usd(iv.loan)} />
-            <Row label="Payment (P&I)" value={usd(iv.payment) + "/mo"} />
+            <Row label="Mortgage payment" value={usd(iv.payment) + "/mo"}
+                 tip="Principal and interest only. Property tax, insurance and everything else are counted separately, in the panel beside this one." />
             <Row label={us ? "Closing costs" : "Property transfer tax and legal"}
                  value={usd(iv.closing)} />
-            <Row label="Cash to close" value={usd(iv.cashToClose)} strong />
-            <Row label="Gross rent multiplier"
-                 value={iv.grm > 0 ? iv.grm.toFixed(1) : "—"} />
+            <Row label="Cash to close" value={usd(iv.cashToClose)} strong
+                 tip="Everything you hand over on day one: down payment, closing costs and any up-front work. This is the figure the market alternative starts with." />
+            <Row label="Price as a multiple of yearly rent"
+                 value={iv.grm > 0 ? iv.grm.toFixed(1) + "\u00d7" : "—"}
+                 tip="The gross rent multiplier — price divided by a year of rent, before any costs. Crude, but it is the quickest way to sanity-check a price against others in the same area." />
           </div>
         </Panel>
 
@@ -2236,40 +2363,96 @@ function InvestTab({ raw, set, p, iv }) {
           <div className="rvb-fields">
             <Field label="Vacancy" suffix="%" step={1}
                    value={raw.ivVacancyPct} onChange={set("ivVacancyPct")}
-                   hint="Of gross rent, every year" />
+                   hint="Of the rent, every year"
+                   tip="The share of the year a unit sits empty between tenants, plus rent you never manage to collect. Even a well-run place rarely does better than 3–5%." />
             <Field label="Rent growth" suffix="%/yr" step={0.5}
                    value={raw.ivRentGrowthPct} onChange={set("ivRentGrowthPct")} />
             <Field label="Property tax" suffix="%" step={0.05}
                    value={raw.ivPropTaxPct} onChange={set("ivPropTaxPct")}
-                   hint="Of value, which grows with the property" />
+                   hint="Of the property's value, which grows with it"
+                   tip="Charged on the value, so this cost rises as the property appreciates. A rising valuation is not free." />
             <Field label="Insurance" prefix="$" suffix="/yr" step={200}
                    value={raw.ivInsYr} onChange={set("ivInsYr")} />
-            <Field label={us ? "HOA" : "Strata"} prefix="$" suffix="/mo" step={50}
+            <Field label={us ? "HOA dues" : "Strata fee"} prefix="$" suffix="/mo" step={50}
                    value={raw.ivHoaMo} onChange={set("ivHoaMo")} />
             <Field label="Utilities you pay" prefix="$" suffix="/yr" step={200}
                    value={raw.ivUtilYr} onChange={set("ivUtilYr")} />
             <Field label="Other fixed costs" prefix="$" suffix="/yr" step={200}
                    value={raw.ivOtherYr} onChange={set("ivOtherYr")}
                    hint="Licensing, accounting, landscaping" />
-            <Field label="Maintenance" suffix="%" step={1}
+            <Field label="Repairs and maintenance" suffix="%" step={1}
                    value={raw.ivMaintPct} onChange={set("ivMaintPct")}
-                   hint="Of collected rent" />
-            <Field label="Capex reserve" suffix="%" step={1}
+                   hint="Of the rent you collect"
+                   tip="Day-to-day upkeep: a blocked drain, a broken window, turning a unit over between tenants. Set as a share of rent because a place that rents for more generally costs more to keep." />
+            <Field label="Set aside for big items" suffix="%" step={1}
                    value={raw.ivCapexPct} onChange={set("ivCapexPct")}
-                   hint="Roof, furnace, appliances. Adds to basis" />
-            <Field label="Management" suffix="%" step={1}
+                   hint="Of the rent you collect"
+                   tip="Money put by for the roof, the furnace, the appliances — things that come round once a decade and sink a year's cash flow if nobody saved for them. It also raises your cost base, so it lowers the taxable gain at sale." />
+            <Field label="Property management" suffix="%" step={1}
                    value={raw.ivMgmtPct} onChange={set("ivMgmtPct")}
-                   hint="Zero if you manage it yourself — but cost your time" />
+                   hint="Of the rent you collect"
+                   tip="What an agency charges to find tenants, collect rent and take the 2am phone call. Set it to zero if you will do it yourself — but that is a job, not a saving." />
           </div>
           <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 12, lineHeight: 1.45 }}>
             Fixed costs grow with inflation at {trim(p.inflPct)}%; the three
             percentages scale with collected rent. None of them are part of net
-            operating income's opposite number — the mortgage stays out of NOI,
-            which is what keeps cap rate, DSCR and cash-on-cash comparable to
-            any other deal.
+            operating income's opposite number — the mortgage deliberately stays
+            out of it, which is what keeps the three ratios above comparable to
+            any other deal you look at.
           </p>
         </Panel>
       </div>
+
+      {/* ---- what the money would otherwise have done ---- */}
+      <Panel className="mb-5">
+        <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>
+          What the money would otherwise have done
+        </h2>
+        <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14, maxWidth: 860, lineHeight: 1.5 }}>
+          The whole verdict on this page is a comparison against investing
+          instead, so this rate is the single assumption it leans on hardest.
+          It is shared with the other tabs — change it here and the rent-versus-buy
+          answer moves with it.
+        </p>
+
+        <div className="rvb-fields">
+          <Field label="Investment return" suffix="%/yr" step={0.5}
+                 value={raw.investPct} onChange={set("investPct")}
+                 tip="What the money would have earned in the market instead. This is the rate the whole comparison turns on: a point either way moves the answer more than almost anything else on the page." />
+          <Field label="Fees and tax drag" suffix="%/yr" step={0.1}
+                 value={raw.feeDragPct} onChange={set("feeDragPct")}
+                 tip="Subtracted from the investment return every year. Covers the fund's management fee and the tax you pay along the way on dividends and distributions, as distinct from the tax on the gain when you finally sell."
+                 hint={"Net " + trim(Math.max(0, p.investPct - p.feeDragPct)) + "%/yr after fees"} />
+          <Field label="Tax on investment gains" suffix="%" step={1}
+                 value={raw.capGainsPct} onChange={set("capGainsPct")}
+                 tip={us
+                   ? "Charged on the growth when the investments are sold at the end. 15% is the long-term rate for most households; set it to 0 if the money would sit in a Roth."
+                   : "Charged on the growth when the investments are sold at the end. Set it to 0 if the money would sit in a TFSA."} />
+          <Field label="Your marginal tax rate" suffix="%" step={1}
+                 value={raw.marginalTaxPct} onChange={set("marginalTaxPct")}
+                 tip="The rate on the next dollar you earn. Rental profit is taxed at this rate, and a rental loss is worth this much back to you." />
+        </div>
+
+        <div style={{ marginTop: 16, borderTop: "1px solid " + C.line, paddingTop: 12 }}>
+          <Eyebrow>What counts as opportunity cost here</Eyebrow>
+          <div className="mt-2">
+            <Row label="Cash to close, invested instead from day one"
+                 value={usd(iv.cashToClose)} tone={C.buy}
+                 tip="Down payment, closing costs and any up-front work. The market alternative starts with all of it and compounds from month one." />
+            <Row label="Money you feed the property, invested instead"
+                 value={iv.totCF < 0 ? usd(-iv.totCF) : "None — it pays for itself"}
+                 tone={iv.totCF < 0 ? C.buy : C.mute}
+                 tip="Every month the property costs more than it collects, that shortfall is handed to the market side too. Otherwise a property that bleeds money would look free." />
+            <Row label="Both sides sold and taxed at the horizon" value="Yes"
+                 tip="Neither side gets to finish holding an untaxed gain. The property pays selling costs, capital gains and depreciation recapture; the portfolio pays tax on its growth." />
+          </div>
+          <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 10, maxWidth: 860, lineHeight: 1.5 }}>
+            Positive cash flow goes the other way — into a portfolio on the
+            property's side, at the same rate — so neither side gets free money
+            sitting idle in a chequing account.
+          </p>
+        </div>
+      </Panel>
 
       {/* ---- depreciation and tax ---- */}
       <Panel className="mb-5">
@@ -2381,11 +2564,11 @@ function InvestTab({ raw, set, p, iv }) {
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-2">
               <span style={{ width: 14, height: 3, background: C.buy, display: "inline-block" }} />
-              <span style={{ fontFamily: MONO, fontSize: 11, color: C.buy }}>PROPERTY</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: C.buy }}>Property</span>
             </span>
             <span className="flex items-center gap-2">
               <span style={{ width: 14, height: 3, background: C.rent, display: "inline-block" }} />
-              <span style={{ fontFamily: MONO, fontSize: 11, color: C.rent }}>MARKET</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: C.rent }}>The market</span>
             </span>
           </div>
         </div>
@@ -2420,7 +2603,7 @@ function InvestTab({ raw, set, p, iv }) {
                       borderRadius: 3, padding: "8px 10px", fontFamily: MONO, fontSize: 12,
                     }}>
                       <div style={{ color: C.mute, fontSize: 10.5, marginBottom: 4 }}>
-                        {d.t === 0 ? "TODAY" : "YEAR " + d.t.toFixed(1)}
+                        {d.t === 0 ? "Today" : "Year " + d.t.toFixed(1)}
                       </div>
                       <div style={{ color: C.buy }}>Property · {usd(d.buy)}</div>
                       <div style={{ color: C.rent }}>Market · {usd(d.rent)}</div>
@@ -2928,6 +3111,11 @@ export default function RentVsBuy() {
     .rvb-pair-wide { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
     @media (min-width: 1500px) { .rvb-pair-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+    /* Rental units: as many across as fit, rather than two very wide ones */
+    .rvb-units { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (min-width: 700px) { .rvb-units { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (min-width: 1100px) { .rvb-units { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
     /* Metric strip: four across when there is room, two up otherwise */
     .rvb-metrics { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     @media (min-width: 1100px) { .rvb-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -3067,7 +3255,7 @@ export default function RentVsBuy() {
         )}
 
         {tab === "invest" ? (
-          <InvestTab raw={raw} set={set} p={p} iv={iv} />
+          <InvestTab raw={raw} set={set} setRaw={setRaw} p={p} iv={iv} />
         ) : tab === "compare" ? (
           <CompareTab
             raw={raw}
@@ -3290,7 +3478,8 @@ export default function RentVsBuy() {
                 <Field label="Purchase price" prefix="$" step={25000} value={raw.homePrice} onChange={set("homePrice")} hint={"Mortgage " + usd(r.loan)} />
                 <Field label="Down payment" suffix="%" step={1} value={raw.downPct} onChange={set("downPct")} hint={usd(r.down)} />
                 <Field label="Appreciation" suffix="%/yr" step={0.25} value={raw.apprPct} onChange={set("apprPct")} hint={US ? "Long-run US average ≈ 3–4%" : "Detached is down ~5% YoY"} />
-                <Field label="Legal, inspection, move" prefix="$" step={500} value={raw.legalFees} onChange={set("legalFees")} />
+                <Field label="Legal, inspection, move" prefix="$" step={500} value={raw.legalFees} onChange={set("legalFees")}
+                       tip="Conveyancing, the home inspection, and the cost of physically moving in. Paid on day one and never recovered." />
               </Group>
 
               <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }} className="mb-6">
@@ -3356,11 +3545,13 @@ export default function RentVsBuy() {
                 <div className="rvb-fields mt-3">
                   {!US && (
                     <>
-                      <Field label="From FHSA" prefix="$" step={1000} value={raw.fhsaUse} onChange={set("fhsaUse")} hint={"Tax-free \u00b7 cap " + usd(r.fhsaCap)} />
-                      <Field label="From RRSP (HBP)" prefix="$" step={1000} value={raw.hbpUse} onChange={set("hbpUse")} hint={"Repayable \u00b7 cap " + usd(r.hbpCap)} />
+                      <Field label="From a First Home Savings Account" prefix="$" step={1000} value={raw.fhsaUse} onChange={set("fhsaUse")} hint={"Tax-free \u00b7 limit " + usd(r.fhsaCap)}
+                             tip="The FHSA. Deductible going in and tax-free coming out if it buys a home, which makes it the cheapest money on this list. Needs the federal first-time test: no home you lived in for four years." />
+                      <Field label="From an RRSP, under the Home Buyers' Plan" prefix="$" step={1000} value={raw.hbpUse} onChange={set("hbpUse")} hint={"Repayable \u00b7 limit " + usd(r.hbpCap)}
+                             tip="A loan from yourself: you withdraw from the RRSP tax-free, then have to put it back over fifteen years. Miss a repayment and that year's share is added to your income and taxed." />
                     </>
                   )}
-                  <Field label="From cash / savings" prefix="$" step={1000} value={raw.cashSavings} onChange={set("cashSavings")} hint="No tax to use it" />
+                  <Field label="From cash and savings" prefix="$" step={1000} value={raw.cashSavings} onChange={set("cashSavings")} hint="No tax to use it" />
                   <Field
                     label="From brokerage"
                     prefix="$"
@@ -3374,7 +3565,7 @@ export default function RentVsBuy() {
                           style={{
                             fontFamily: MONO,
                             fontSize: 9,
-                            letterSpacing: "0.1em",
+                            letterSpacing: "0.03em",
                             color: C.buy,
                             border: "1px solid " + C.buySoft,
                             borderRadius: 2,
@@ -3382,7 +3573,7 @@ export default function RentVsBuy() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          AUTO
+                          Auto
                         </span>
                       ) : (
                         <button
@@ -3391,7 +3582,7 @@ export default function RentVsBuy() {
                           style={{
                             fontFamily: MONO,
                             fontSize: 9,
-                            letterSpacing: "0.1em",
+                            letterSpacing: "0.03em",
                             color: C.mute,
                             background: "transparent",
                             border: "1px solid " + C.line,
@@ -3401,13 +3592,13 @@ export default function RentVsBuy() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          RESET
+                          Reset
                         </button>
                       )
                     }
                   />
                   <Field
-                    label="Share of it that's gain"
+                    label="Share of it that is gain"
                     suffix="%"
                     step={5}
                     value={raw.taxableGainPct}
@@ -3443,7 +3634,7 @@ export default function RentVsBuy() {
                   {!p.autoBrokerage && r.shortfall > 0.5 && (
                     <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 4, lineHeight: 1.4 }}>
                       Your sources leave {usd(r.shortfall)} uncovered, so it's counted as extra
-                      cash. Hit RESET to let the brokerage figure balance again.
+                      cash. Hit Reset to let the brokerage figure balance again.
                     </div>
                   )}
                 </div>
@@ -3490,14 +3681,19 @@ export default function RentVsBuy() {
                 )}
                 <Field label="Amortization" suffix="yr" step={5} value={raw.amortYears} onChange={set("amortYears")} hint={US ? "30 is standard" : "25 unless first-time"} />
                 {US && (
-                  <Field label="PMI" suffix="%/yr" step={0.05} value={raw.pmiPct} onChange={set("pmiPct")} hint="Of the balance, until 78% LTV. None at 20% down" />
+                  <Field label="Mortgage insurance" suffix="%/yr" step={0.05} value={raw.pmiPct} onChange={set("pmiPct")} hint="Charged monthly. None at 20% down"
+                         tip="Private mortgage insurance, or PMI. It protects the lender, not you, and it is charged every month until you owe 78% of what you originally paid. Unlike Canada's CMHC premium it is not added to the loan, and it has not been tax-deductible since 2021." />
                 )}
-                <Field label="Cost to sell" suffix="%" step={0.25} value={raw.sellCostPct} onChange={set("sellCostPct")} hint={US ? "5–6% all in, agent included" : "7% first $100k, 2.5% after"} />
+                <Field label="Cost to sell" suffix="%" step={0.25} value={raw.sellCostPct} onChange={set("sellCostPct")} hint={US ? "5–6% all in, agent included" : "7% first $100k, 2.5% after"}
+                       tip="Agent commission, legal fees and staging, as a share of the sale price. Charged at every point on the chart, because both lines show what you would actually walk away with if you sold that day." />
               </Group>
 
               {r.premium > 0 && (
                 <div style={{ background: C.panelAlt, borderRadius: 3, padding: 10, marginTop: -8 }} className="mb-6">
-                  <Eyebrow>CMHC insurance</Eyebrow>
+                  <Eyebrow>
+                    Mortgage insurance{" "}
+                    <Info label="mortgage insurance" text="The CMHC premium. Anyone putting down less than 20% has to buy it, and it protects the lender rather than you. It is added to the mortgage instead of paid up front, so you pay interest on it for the life of the loan." />
+                  </Eyebrow>
                   <div className="flex items-baseline justify-between" style={{ marginTop: 4 }}>
                     <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>
                       {r.premiumPct}% of the loan, added to it
@@ -3510,7 +3706,10 @@ export default function RentVsBuy() {
               )}
               {US && r.totPMI > 0.5 && (
                 <div style={{ background: C.panelAlt, borderRadius: 3, padding: 10, marginTop: -8 }} className="mb-6">
-                  <Eyebrow>Mortgage insurance</Eyebrow>
+                  <Eyebrow>
+                    Mortgage insurance{" "}
+                    <Info label="mortgage insurance" text="Private mortgage insurance, or PMI. Required below 20% down, it protects the lender rather than you, and it stops automatically once you owe 78% of the original purchase price." />
+                  </Eyebrow>
                   <div className="flex items-baseline justify-between" style={{ marginTop: 4 }}>
                     <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>
                       {r.pmiEndsMonth
@@ -3556,7 +3755,8 @@ export default function RentVsBuy() {
                       step={5}
                       value={raw.remodelRecoveryPct}
                       onChange={set("remodelRecoveryPct")}
-                      hint={usd(r.remodelValue) + " \u00b7 most renos recover 50\u201380%"}
+                      hint={usd(r.remodelValue) + " \u00b7 most work recovers 50\u201380%"}
+                      tip="How much of what you spend actually shows up in what the place is worth. Kitchens and bathrooms recover most of it; a swimming pool recovers very little."
                     />
                   </>
                 )}
@@ -3618,15 +3818,17 @@ export default function RentVsBuy() {
               <Group
                 title={US ? "Rental income" : "Mortgage helper"}
                 note={US
-                  ? "An ADU, a basement apartment or a room let out. Zero if there isn't one."
+                  ? "A garage apartment, a basement flat or a room let out. Zero if there isn't one."
                   : "The suite downstairs. Set the rent to zero if there isn't one."}
               >
-                <Field label={US ? "Rent from it" : "Suite rent"} prefix="$" suffix="/mo" step={50} value={raw.suiteRentMo} onChange={set("suiteRentMo")} hint={p.suiteRentMo > 0 ? (US ? "1-bed ADU \u2248 $1,200" : "2-bed \u2248 $1,900") : "None"} />
+                <Field label={US ? "Rent from it" : "Suite rent"} prefix="$" suffix="/mo" step={50} value={raw.suiteRentMo} onChange={set("suiteRentMo")} hint={p.suiteRentMo > 0 ? (US ? "One bedroom \u2248 $1,200" : "Two bedroom \u2248 $1,900") : "None"} />
                 {p.suiteRentMo > 0 && (
                   <>
                     <Field label="Suite rent increase" suffix="%/yr" step={0.25} value={raw.suiteGrowthPct} onChange={set("suiteGrowthPct")} hint="Resets on turnover" />
-                    <Field label="Vacancy allowance" suffix="%" step={1} value={raw.suiteVacancyPct} onChange={set("suiteVacancyPct")} />
-                    <Field label="Suite share of the house" suffix="%" step={5} value={raw.suiteSharePct} onChange={set("suiteSharePct")} hint="Sets what you deduct" />
+                    <Field label="Vacancy allowance" suffix="%" step={1} value={raw.suiteVacancyPct} onChange={set("suiteVacancyPct")}
+                       tip="The share of the year it sits empty between tenants, plus rent you never collect." />
+                    <Field label="Share of the house it takes up" suffix="%" step={5} value={raw.suiteSharePct} onChange={set("suiteSharePct")} hint="Sets how much you can deduct"
+                       tip="The rented portion by floor area. That share of the mortgage interest, property tax, insurance, utilities and upkeep becomes deductible against the rent it earns." />
                   </>
                 )}
               </Group>
@@ -3638,10 +3840,16 @@ export default function RentVsBuy() {
               )}
 
               <Group title="Your money" note="What the cash does when it isn't in a house.">
-                <Field label="Investment return" suffix="%/yr" step={0.5} value={raw.investPct} onChange={set("investPct")} />
-                <Field label="Your marginal tax rate" suffix="%" step={1} value={raw.marginalTaxPct} onChange={set("marginalTaxPct")} hint={US ? "Federal bracket, for the deduction and rental income" : p.suiteRentMo > 0 ? "Suite income + RRSP" : "Values RRSP/FHSA money"} />
-                <Field label="Tax on gains" suffix="%" step={1} value={raw.capGainsPct} onChange={set("capGainsPct")} hint={US ? "15% long-term for most; 0 inside a Roth" : "0 inside a TFSA"} />
-                <Field label="Fees & tax drag" suffix="%/yr" step={0.1} value={raw.feeDragPct} onChange={set("feeDragPct")} hint="MER + tax on payouts" />
+                <Field label="Investment return" suffix="%/yr" step={0.5} value={raw.investPct} onChange={set("investPct")}
+                       tip="What the money earns in the market instead of sitting in a house. The renter's whole case rests on this, and a point either way moves the answer more than almost anything else here." />
+                <Field label="Your marginal tax rate" suffix="%" step={1} value={raw.marginalTaxPct} onChange={set("marginalTaxPct")} hint={US ? "Your top federal bracket" : p.suiteRentMo > 0 ? "Taxes the suite income" : "Values registered money"}
+                       tip={US
+                         ? "The rate on your next dollar of income. It sets what the mortgage interest deduction is worth, and what you pay on any rental income."
+                         : "The rate on your next dollar of income. It taxes the suite income, and it is also how the calculator discounts RRSP and FHSA money, since you would eventually pay this rate to withdraw it."} />
+                <Field label="Tax on investment gains" suffix="%" step={1} value={raw.capGainsPct} onChange={set("capGainsPct")} hint={US ? "15% long-term for most; 0 inside a Roth" : "0 inside a TFSA"}
+                       tip="Charged on the growth when the investments are finally sold. It applies to both sides, so it is not a thumb on the scale for either." />
+                <Field label="Fees and tax drag" suffix="%/yr" step={0.1} value={raw.feeDragPct} onChange={set("feeDragPct")} hint="Subtracted from the return above"
+                       tip="The fund's yearly management fee, plus the tax you pay along the way on dividends and distributions \u2014 as distinct from the tax on the gain when you finally sell, which is the field above." />
                 <Field label="Inflation" suffix="%/yr" step={0.25} value={raw.inflPct} onChange={set("inflPct")} />
               </Group>
             </Panel>
@@ -3658,11 +3866,11 @@ export default function RentVsBuy() {
                 <div className="flex items-center gap-4">
                   <span className="flex items-center gap-2">
                     <span style={{ width: 14, height: 3, background: C.buy, display: "inline-block" }} />
-                    <span style={{ fontFamily: MONO, fontSize: 11, color: C.buy }}>OWN</span>
+                    <span style={{ fontFamily: MONO, fontSize: 11, color: C.buy }}>Owning</span>
                   </span>
                   <span className="flex items-center gap-2">
                     <span style={{ width: 14, height: 3, background: C.rent, display: "inline-block" }} />
-                    <span style={{ fontFamily: MONO, fontSize: 11, color: C.rent }}>RENT</span>
+                    <span style={{ fontFamily: MONO, fontSize: 11, color: C.rent }}>Renting</span>
                   </span>
                 </div>
               </div>
@@ -3708,7 +3916,7 @@ export default function RentVsBuy() {
                             }}
                           >
                             <div style={{ color: C.mute, fontSize: 10.5, marginBottom: 4 }}>
-                              {d.t === 0 ? "TODAY" : "YEAR " + d.t.toFixed(1)}
+                              {d.t === 0 ? "Today" : "Year " + d.t.toFixed(1)}
                             </div>
                             <div style={{ color: C.buy }}>Own · {usd(d.buy)}</div>
                             <div style={{ color: C.rent }}>Rent · {usd(d.rent)}</div>
@@ -3904,15 +4112,20 @@ export default function RentVsBuy() {
                 {US && (
                   <Row
                     label={"Mortgage interest deduction, " + p.horizonYears + " years"}
+                    tip="Worth the difference between itemizing and taking the standard deduction \u2014 and that comparison is made for the renter as well, so this counts only the deduction owning actually buys you. At most prices that is nothing."
                     value={usd(r.totTaxBenefit)}
                     tone={r.totTaxBenefit > 0.5 ? C.buy : C.mute}
                   />
                 )}
                 {US && r.gainTaxEnd > 0.5 && (
                   <Row
-                    label={"Tax on the gain above the §121 exclusion"}
+                    label="Tax on the gain above the exclusion"
                     value={usd(r.gainTaxEnd)}
                     tone={C.rent}
+                    tip={"Selling your main home shelters the first " +
+                         usd(p.couple ? 500000 : 250000) + " of gain from tax, so long as " +
+                         "you owned and lived in it for two of the last five years. This is " +
+                         "the tax on whatever is above that."}
                   />
                 )}
                 {r.renewalPayment !== null && (
@@ -4043,7 +4256,7 @@ export default function RentVsBuy() {
                   ...(p.suiteRentMo > 0
                     ? US
                       ? [
-                          ["The ADU has to exist and be legal", "Building one runs $100\u2013250k, raises your insurance, and zoning still forbids it across much of the country."],
+                          ["The second unit has to exist and be legal", "Building one runs $100\u2013250k, raises your insurance, and zoning still forbids it across much of the country."],
                           ["Renting part of your home splits the \u00a7121 exclusion", "The rented share is not a principal residence, and depreciation on it is recaptured whether or not you ever claimed it."],
                         ]
                       : [
@@ -4111,9 +4324,9 @@ export default function RentVsBuy() {
                     <thead>
                       <tr style={{ background: C.panel }}>
                         {[
-                          ["Yr", false],
+                          ["Year", false],
                           ["Home value", false],
-                          ["Loan", true],
+                          ["Mortgage", true],
                           ["Equity", true],
                           ["Own paid", true],
                           ["Rent paid", true],
@@ -4133,8 +4346,7 @@ export default function RentVsBuy() {
                                 padding: "6px 7px",
                                 borderBottom: "1px solid " + C.ink,
                                 fontSize: 10,
-                                letterSpacing: "0.08em",
-                                textTransform: "uppercase",
+                                letterSpacing: "0.03em",
                                 color: C.mute,
                                 fontWeight: 500,
                                 whiteSpace: "nowrap",
