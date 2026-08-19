@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rent vs Buy — Canada &amp; the United States</title>
 <meta name="description" content="Rent versus buy for Canada and the United States, with an investment property model, mortgage helper income, and an appreciation calculator.">
-<meta name="theme-color" content="#E7E9E3">
+<meta name="theme-color" content="#FFFFFF">
 <meta name="color-scheme" content="light dark">
 <!-- Theme is resolved before first paint, from a cookie scoped to
      .rishabhdoshi.com so the choice carries over from the portfolio
@@ -17,10 +17,12 @@
   if(!t){ try{ t=localStorage.getItem('sheet-theme'); }catch(e){} }
   if(t!=='light'&&t!=='dark')
     t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
-  var bg=t==='dark'?'#0E1C2B':'#E7E9E3';
+  /* feltwork-allow-hex: pre-paint, before any stylesheet exists.
+     Must match --paper in feltwork/src/tokens.css. */
+  var bg=t==='dark'?'#1B2733':'#FFFFFF';
   var r=document.documentElement;
   r.setAttribute('data-theme',t);
-  r.style.setProperty('--rvb-bg',bg);
+  r.style.background=bg;
   r.style.colorScheme=t;
   document.addEventListener('DOMContentLoaded',function(){
     var mt=document.querySelector('meta[name="theme-color"]');
@@ -35,8 +37,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Rent vs Buy">
-<link rel="preload" href="fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/IBMPlexMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/HankenGrotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/MartianMono.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>

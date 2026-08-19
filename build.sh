@@ -19,13 +19,16 @@ for (const [name,b64] of Object.entries(icons)) fs.writeFileSync('dist/'+name, B
 console.log('  icons: '+Object.keys(icons).length);
 "
 
-# 3. fonts, straight from the IBM Plex packages
-for fam in Sans Mono Serif; do
-  for w in Regular Medium SemiBold; do
-    src=$(find node_modules/@ibm/plex-$(echo $fam | tr 'A-Z' 'a-z') -name "IBMPlex${fam}-${w}-Latin1.woff2" 2>/dev/null | head -1)
-    if [ -n "$src" ]; then cp "$src" "dist/fonts/IBMPlex${fam}-${w}.woff2"; else echo "  !! missing IBMPlex${fam}-${w}"; fi
-  done
-done
+# 3. Feltwork — the shared design system. Emits feltwork.css, the three
+#    variable faces, the felt texture and the SVG filter defs into dist/.
+if [ -x node_modules/.bin/feltwork ]; then
+  FW="node_modules/.bin/feltwork"
+elif [ -f ../feltwork/bin/feltwork.mjs ]; then
+  FW="node ../feltwork/bin/feltwork.mjs"
+else
+  echo "  !! feltwork not found — run 'npm install'" >&2; exit 1
+fi
+$FW build --out dist >/dev/null
 echo "  fonts: $(ls dist/fonts | wc -l | tr -d ' ')"
 
 VERSION=$(node -p "require('./package.json').version")
@@ -33,9 +36,12 @@ npx esbuild --bundle src/main.jsx --outfile=dist/app.js \
   --jsx=automatic --minify --define:process.env.NODE_ENV='"production"' \
   --define:__APP_VERSION__='"'$VERSION'"' --define:__BUILD_STAMP__='"'$BUILD'"' \
   --log-level=warning
-npx tailwindcss -c tailwind.config.js -i src/tw.css -o dist/tw.out.css --minify 2>/dev/null
-cat src/fonts.css dist/tw.out.css > dist/app.css
-rm -f dist/tw.out.css
+# Tailwind is gone. It was supplying ~30 layout utilities and its Preflight
+# reset from a config with no theme; Feltwork's base.css carries the reset and
+# App.jsx defines the same class names on the 8px rail. One less build step,
+# one less dependency, and the spacing now snaps.
+cat dist/feltwork.css > dist/app.css
+rm -f dist/feltwork.css
 
 # 5. service worker, stamped so returning visitors pick up the new version
 sed "s/__BUILD__/$BUILD/" src/sw.template.js > dist/sw.js

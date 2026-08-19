@@ -14,15 +14,12 @@ const SHELL = [
   "icon-192.png",
   "icon-512.png",
   "icon-maskable-512.png",
-  "fonts/IBMPlexSans-Regular.woff2",
-  "fonts/IBMPlexSans-Medium.woff2",
-  "fonts/IBMPlexSans-SemiBold.woff2",
-  "fonts/IBMPlexMono-Regular.woff2",
-  "fonts/IBMPlexMono-Medium.woff2",
-  "fonts/IBMPlexMono-SemiBold.woff2",
-  "fonts/IBMPlexSerif-Regular.woff2",
-  "fonts/IBMPlexSerif-Medium.woff2",
-  "fonts/IBMPlexSerif-SemiBold.woff2",
+  // Feltwork ships three VARIABLE faces in place of nine static IBM Plex
+  // files. If this list drifts from what build.sh emits, offline loads 404.
+  "fonts/Archivo.woff2",
+  "fonts/HankenGrotesk.woff2",
+  "fonts/MartianMono.woff2",
+  "tex/felt-1024.png",
 ];
 
 self.addEventListener("install", (e) => {

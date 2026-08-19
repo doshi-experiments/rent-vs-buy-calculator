@@ -1,7 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#E7E9E3"/>
-  <path d="M64 372 C 200 356, 300 300, 448 128" fill="none" stroke="#0F5C52" stroke-width="34" stroke-linecap="round"/>
-  <path d="M64 300 C 200 292, 320 268, 448 236" fill="none" stroke="#8C2F5E" stroke-width="34" stroke-linecap="round"/>
-  <circle cx="236" cy="330" r="30" fill="#E7E9E3"/>
-  <circle cx="236" cy="330" r="16" fill="#D9A408"/>
+  <!-- feltwork-allow-hex
+       A standalone icon file: loaded through <link rel="icon"> and rasterised
+       into the PWA icons, so it is never part of a document that has the
+       tokens. Every value is copied from a measured Feltwork ramp stop and
+       must be kept in step with feltwork/src/tokens.css:
+         paper #FFFFFF   euca #8BB4AB (owning)
+         blush #CC9C9E (renting)      canary #D6C786 (the crossover)
+       Two lines that cross, and the year they do it. -->
+  <rect width="512" height="512" fill="#FFFFFF"/>
+  <path d="M64 372 C 200 356, 300 300, 448 128" fill="none" stroke="#8BB4AB" stroke-width="34" stroke-linecap="round"/>
+  <path d="M64 300 C 200 292, 320 268, 448 236" fill="none" stroke="#CC9C9E" stroke-width="34" stroke-linecap="round"/>
+  <circle cx="236" cy="330" r="30" fill="#FFFFFF"/>
+  <circle cx="236" cy="330" r="16" fill="#D6C786"/>
 </svg>

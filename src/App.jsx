@@ -18,51 +18,70 @@ import {
 /* ------------------------------------------------------------------ *
  *  Palette + type
  * ------------------------------------------------------------------ */
-/* Two sheets, one drawing. `C` is deliberately mutable: it is read at
- * render time by every component and by the <style> block below, so
- * swapping its contents and re-rendering repaints the whole app. That
- * beats threading a theme prop through ~2000 lines of JSX, and it keeps
- * literal hex values going to Recharts, which will not resolve CSS
- * variables in its SVG presentation attributes. */
-const LIGHT = {
-  bg: "#E7E9E3",
-  panel: "#FBFBF8",
-  panelAlt: "#F1F2ED",
-  ink: "#15181A",
-  mute: "#6C7370",
-  line: "#D2D6CE",
-  buy: "#0F5C52",
-  buySoft: "#A9C6BF",
-  rent: "#8C2F5E",
-  rentSoft: "#D9AEC1",
-  signal: "#D9A408",
-  rentWash: "#F6E9EE",
-  grid: "#D2D6CE",
-  field: "#FFFFFF",
-  onBuy: "#FFFFFF",
+/* `C` is deliberately mutable: it is read at render time by every component
+ * and by the <style> block below, so swapping its contents and re-rendering
+ * repaints the whole app. That beats threading a theme prop through ~2000
+ * lines of JSX, and — the reason it exists — it keeps LITERAL hex values
+ * going to Recharts, which will not resolve CSS variables inside SVG
+ * presentation attributes.
+ *
+ * What changed with Feltwork: the values are no longer written here. They are
+ * READ from the stylesheet at boot, so tokens.css stays the single source of
+ * truth and this file holds no palette of its own. The map below is the whole
+ * bridge — a role name on the left, the Feltwork token it comes from on the
+ * right.
+ *
+ * HUE BINDING (local). Feltwork §2's meanings are portfolio categories and
+ * say nothing about a mortgage, so the ramps are rebound here:
+ *     eucalyptus -> buy      blush -> rent      canary -> signal
+ *
+ * Note `buyInk`/`rentInk`. The felt hues are SURFACE colours: as text on
+ * paper they run 1.7-3.6:1 and all fail AA. Anything that sets a text colour
+ * uses the -Ink variants; fills and strokes use the plain ones.
+ */
+const TOKENS = {
+  bg: "--paper",
+  panel: "--chip",
+  panelAlt: "--chip",
+  ink: "--text",
+  mute: "--text-mute",
+  line: "--rule",
+  buy: "--euca",
+  buySoft: "--euca-light",
+  rent: "--blush",
+  rentSoft: "--blush-light",
+  signal: "--canary",
+  rentWash: "--blush-hi",
+  grid: "--rule",
+  field: "--paper",
+  onBuy: "--ink-deep",      /* type ON a felt fill — 6.65 euca, 6.37 blush */
+  buyInk: "--euca-text",
+  rentInk: "--blush-text",
+  signalInk: "--canary-text",
+  scrim: "--ink",           /* chart hover band. Never black: §12 forbids it. */
 };
-const DARK = {
-  bg: "#0E1C2B",
-  panel: "#14273A",
-  panelAlt: "#1A2F44",
-  ink: "#E8F0F7",
-  mute: "#93AABF",
-  line: "#2A4258",
-  buy: "#5CC0AE",
-  buySoft: "#2E6A61",
-  rent: "#E68AB4",
-  rentSoft: "#7A3355",
-  signal: "#E8BC3E",
-  rentWash: "#2A1B25",
-  grid: "#24394E",
-  field: "#0A1622",
-  onBuy: "#0E1C2B",
-};
-const LIGHT_TINTS = ["#0F5C52", "#2E7568", "#4C8D80", "#6BA599", "#8ABDB3", "#AED4CC"];
-const DARK_TINTS  = ["#5CC0AE", "#4EAD9C", "#419A8A", "#358878", "#2A7567", "#206356"];
 
-const C = { ...LIGHT };
-const BUY_TINTS = [...LIGHT_TINTS];
+/* Stacked-bar shades: the five MEASURED stops of the buy ramp, dark to light.
+ * Not computed, not lightened — §12 wants every one of these to be a real
+ * sampled value. Consumers index through tint(), which wraps, because the
+ * ramp is five stops and one caller wants a sixth. */
+const TINT_TOKENS = [
+  "--euca-shadow", "--euca-core", "--euca", "--euca-light", "--euca-hi",
+];
+
+const C = {};
+const BUY_TINTS = [];
+const tint = (n) => BUY_TINTS[((n % BUY_TINTS.length) + BUY_TINTS.length) % BUY_TINTS.length];
+
+/* Resolve the tokens against the live document. Must run AFTER data-theme is
+ * set on the root, or every value comes back one theme stale. */
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  const get = (t) => cs.getPropertyValue(t).trim();
+  for (const [k, t] of Object.entries(TOKENS)) C[k] = get(t);
+  BUY_TINTS.length = 0;
+  BUY_TINTS.push(...TINT_TOKENS.map(get));
+}
 
 function readTheme() {
   const m = document.cookie.match(/(?:^|;\s*)sheet-theme=(light|dark)/);
@@ -73,13 +92,13 @@ function readTheme() {
   return t;
 }
 function applyPalette(t) {
-  Object.assign(C, t === "dark" ? DARK : LIGHT);
-  BUY_TINTS.length = 0;
-  BUY_TINTS.push(...(t === "dark" ? DARK_TINTS : LIGHT_TINTS));
   const root = document.documentElement;
+  /* Order matters: stamp the theme first, THEN read. getComputedStyle
+     resolves against whatever data-theme currently says. */
   root.setAttribute("data-theme", t);
-  root.style.setProperty("--rvb-bg", C.bg);
   root.style.colorScheme = t;
+  readTokens();
+  root.style.background = C.bg;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", C.bg);
 }
@@ -93,9 +112,11 @@ function writeTheme(t) {
     localStorage.setItem("sheet-theme", t);
   } catch (e) {}
 }
-const SERIF = "'IBM Plex Serif', Georgia, 'Times New Roman', serif";
-const SANS = "'IBM Plex Sans', system-ui, -apple-system, sans-serif";
-const MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
+/* Feltwork's three faces. Archivo is the display face and is set heavy and
+ * expanded on purpose — the felt texture needs mass to read as nap. */
+const SERIF = "'Archivo', 'Helvetica Neue', Arial, sans-serif";
+const SANS = "'Hanken Grotesk', system-ui, -apple-system, sans-serif";
+const MONO = "'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace";
 
 /* ------------------------------------------------------------------ *
  *  Formatting
@@ -1059,7 +1080,7 @@ function Info({ text, label }) {
             left: pos.left, top: pos.top, bottom: pos.bottom,
             background: C.field, color: C.ink,
             border: "1px solid " + C.line, borderRadius: 4,
-            boxShadow: "0 6px 20px rgba(0,0,0,.22)",
+            boxShadow: "0 3px 6px rgba(44,61,78,.11), 0 28px 60px rgba(44,61,78,.09)",
             padding: "9px 11px",
             fontFamily: SANS, fontSize: 11.5, lineHeight: 1.45,
             fontWeight: 400, letterSpacing: 0, textTransform: "none",
@@ -1164,7 +1185,6 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, 
             color: readOnly ? C.mute : C.ink,
             background: "transparent",
             border: "none",
-            outline: "none",
             padding: "7px 4px",
             minWidth: 0,
             cursor: readOnly ? "default" : "text",
@@ -1242,7 +1262,6 @@ function SliderRow({ label, value, onChange, min, max, step, accent, suffix, pre
             color: C.ink,
             background: "transparent",
             border: "none",
-            outline: "none",
             padding: "5px 2px",
             width: format === "money" ? 74 : 46,
             textAlign: "right",
@@ -3083,7 +3102,60 @@ export default function RentVsBuy() {
           : Math.round(r.breakeven * 12) % 12);
 
   const css = `
-    .rvb input:focus-visible, .rvb button:focus-visible { outline: 2px solid ${C.signal}; outline-offset: 1px; }
+    /* Layout utilities. These were Tailwind's, and Tailwind is gone — it was
+       contributing ~30 layout classes and a reset, with a config that had no
+       theme at all, so it was a whole build step for very little. Feltwork's
+       base.css now supplies the reset.
+
+       The step values are NOT Tailwind's. Its scale is off Feltwork's 8px
+       rail in three places (mb-5 was 20px, mt-3 12px, mb-7 28px), and §7 asks
+       every block to snap to it, so each step maps to the nearest rail token
+       instead. Kept under the original class names so 118 call sites in the
+       JSX did not have to be touched. */
+    .rvb .flex { display: flex; }
+    .rvb .grid { display: grid; }
+    .rvb .block { display: block; }
+    .rvb .items-center { align-items: center; }
+    .rvb .items-baseline { align-items: baseline; }
+    .rvb .justify-between { justify-content: space-between; }
+    .rvb .flex-wrap { flex-wrap: wrap; }
+    .rvb .w-full { width: 100%; }
+    .rvb .cursor-pointer { cursor: pointer; }
+    .rvb .overflow-x-auto { overflow-x: auto; }
+    .rvb .grid-cols-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .rvb .grid-cols-5 { grid-template-columns: repeat(5, minmax(0,1fr)); }
+    .rvb .gap-1 { gap: var(--s-1); }
+    .rvb .gap-2 { gap: var(--s-2); }
+    .rvb .gap-3 { gap: var(--s-3); }
+    .rvb .gap-4 { gap: var(--s-3); }
+    .rvb .mt-1 { margin-top: var(--s-1); }
+    .rvb .mt-2 { margin-top: var(--s-2); }
+    .rvb .mt-3 { margin-top: var(--s-3); }
+    .rvb .mt-4 { margin-top: var(--s-3); }
+    .rvb .mt-5 { margin-top: var(--s-4); }
+    .rvb .mt-6 { margin-top: var(--s-4); }
+    .rvb .mb-1 { margin-bottom: var(--s-1); }
+    .rvb .mb-3 { margin-bottom: var(--s-3); }
+    .rvb .mb-4 { margin-bottom: var(--s-3); }
+    .rvb .mb-5 { margin-bottom: var(--s-4); }
+    .rvb .mb-6 { margin-bottom: var(--s-4); }
+    .rvb .mb-7 { margin-bottom: var(--s-5); }
+    .rvb .py-8 { padding-top: var(--s-5); padding-bottom: var(--s-5); }
+    .rvb .px-5 { padding-left: var(--s-4); padding-right: var(--s-4); }
+
+    /* §9: a visible focus ring on EVERY interactive element, always. The old
+       rule covered only input and button, used the signal hue (which §2
+       reserves for meaning, not interaction), and was defeated on two inputs
+       by an inline outline:none — those are removed. Focus is the pencil. */
+    .rvb :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+      outline: 3px solid var(--pencil); outline-offset: 3px; border-radius: var(--r-pill);
+    }
+
+    /* Everything compresses; nothing lifts. */
+    .rvb button:not(:disabled):hover { transform: translateY(1px) scale(0.992); }
+    .rvb button:not(:disabled):active { transform: translateY(2px) scaleY(0.975) scaleX(1.008); }
+    .rvb button { transition: transform var(--release); }
+    .rvb button:active { transition-duration: var(--squash); }
     .rvb input[type=number]::-webkit-outer-spin-button,
     .rvb input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .rvb input[type=number] { -moz-appearance: textfield; }
@@ -3614,8 +3686,8 @@ export default function RentVsBuy() {
                   <div className="flex" style={{ height: 12, borderRadius: 2, overflow: "hidden" }}>
                     {[
                       ["FHSA", r.fhsaUse, C.buy],
-                      ["RRSP", r.hbpUse, BUY_TINTS[2]],
-                      ["Cash", r.cashUse, BUY_TINTS[5]],
+                      ["RRSP", r.hbpUse, tint(2)],
+                      ["Cash", r.cashUse, tint(5)],
                       ["Brokerage", r.taxableUse, C.signal],
                     ].map(([n2, v, col]) =>
                       v > 0 ? (
@@ -4166,7 +4238,7 @@ export default function RentVsBuy() {
                       />
                       <YAxis hide />
                       <Tooltip
-                        cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                        cursor={{ fill: C.scrim, fillOpacity: 0.06 }}
                         content={({ active, payload, label }) => {
                           if (!active || !payload || !payload.length) return null;
                           const d = payload[0].payload;
