@@ -88,13 +88,18 @@ Once installed it launches from Spotlight, the Start menu, or the dock like anyt
 
 ## Sharing scenarios
 
-Change any input and the address bar updates to match. Only the values you changed are stored, so links stay short:
+Change any input and the address bar updates to match. The path says which
+calculator you're on; the hash carries only the values you changed, so links
+stay short:
 
 ```
-https://yoursite.pages.dev/#p=1250000&sr=2600&h=7
+https://rent-vs-buy.rishabhdoshi.com/#p=1250000&sr=2600&h=7
+https://rent-vs-buy.rishabhdoshi.com/prepayment/#4e=1000
 ```
 
-That's a $1.25M place, $2,600 suite, 7-year horizon. Everything else stays at its default.
+The first is a $1.25M place, $2,600 suite, 7-year horizon. The second opens
+the prepayment calculator with a $1,000/month extra payment. Everything else
+stays at its default.
 
 The **Copy link** button at the top right copies the current view. Text it to yourself and it opens on your phone with exactly those numbers — which is the closest thing to sync you need when there's no server involved.
 
@@ -161,6 +166,20 @@ changes enough to make it stale.
 The FAQ JSON-LD in `routes.json` is emitted on the home page only, since its
 answers describe the whole tool rather than any one tab.
 
+### The shared theme cookie
+
+`writeTheme()` in `App.jsx` stores the light/dark choice as a `sheet-theme`
+cookie scoped to `.rishabhdoshi.com`, and the inline script in
+`index.template.html` reads it back *before first paint* — without that, a
+dark-mode visitor gets a flash of the light shell on every load, since
+`app.js` is deferred.
+
+`portfolio-landing` and `experiments-landing` use the same cookie name and
+scope, so the choice follows you across the subdomains. **Renaming it here
+un-syncs all three, and nothing fails loudly when it happens.**
+`localStorage` is the fallback for contexts where the cookie domain doesn't
+apply, and `prefers-color-scheme` the fallback after that.
+
 ---
 
 ## Why HTTPS matters here
@@ -187,13 +206,15 @@ Preview on `localhost` specifically — service workers only run in a secure con
 
 ```
 src/App.jsx            the whole app, including the model
+src/routes.json        the tab list: paths, titles, descriptions, FAQ
 src/main.jsx           entry point, registers the service worker
-src/sw.template.js     offline cache; __BUILD__ is stamped at build time
+src/sw.template.js     offline cache; __BUILD__ and __ROUTES__ are stamped in
 src/fonts.css          @font-face rules
 src/tw.css             Tailwind entry
-src/static/            index.html, manifest, icon.svg, _headers
-src/static/icons.b64.json   PNG icons, base64-encoded
-build.sh               produces dist/
+src/static/index.template.html   rendered once per route by build.sh
+src/static/            manifest, icon.svg, _headers, robots.txt
+src/static/icons.b64.json   PNG icons + og-image, base64-encoded
+build.sh               produces dist/, including one page per route
 ```
 
 **The repo deliberately contains no binary files.** Fonts are copied out of the `@ibm/plex-*` npm packages at build time, and the PNG icons are decoded from `src/static/icons.b64.json`. That keeps diffs readable and lets any tool that only writes text — including Claude — maintain the whole project.
@@ -204,8 +225,13 @@ To change the icon, edit `src/static/icon.svg`, then regenerate the PNGs:
 node -e "
 const sharp=require('sharp'),fs=require('fs');
 const sizes={'icon-192.png':192,'icon-512.png':512,'icon-maskable-512.png':512,'apple-touch-icon.png':180,'favicon.png':32};
-(async()=>{const out={};for(const[n,s]of Object.entries(sizes))out[n]=(await sharp('src/static/icon.svg').resize(s,s).png().toBuffer()).toString('base64');
-fs.writeFileSync('src/static/icons.b64.json',JSON.stringify(out,null,0));})();
+(async()=>{
+  // Merge into the existing file — og-image.png lives here too and is not
+  // generated from the SVG, so rebuilding the object from scratch would
+  // silently delete it.
+  const out=JSON.parse(fs.readFileSync('src/static/icons.b64.json','utf8'));
+  for(const[n,s]of Object.entries(sizes))out[n]=(await sharp('src/static/icon.svg').resize(s,s).png().toBuffer()).toString('base64');
+  fs.writeFileSync('src/static/icons.b64.json',JSON.stringify(out,null,2));})();
 "
 ```
 
@@ -213,11 +239,22 @@ fs.writeFileSync('src/static/icons.b64.json',JSON.stringify(out,null,0));})();
 
 ### The model
 
-`simulate()` in `src/App.jsx` is the owner-occupier calculation, and
-`simulateRental()` beside it is the investment-property one. Everything between
-the `/* MODEL:START */` and `/* MODEL:END */` markers is pure and DOM-free, so
-it can be sliced out and run in Node — which is how it is tested, there being no
-test framework in the repo.
+There are three models in `src/App.jsx`, all beside each other:
+`simulate()` is the owner-occupier calculation, `simulateRental()` the
+investment-property one, and `simulatePrepay()` the extra-payments one.
+`comparePayments()` sits with them for the payment-comparison tab.
+
+Everything between the `/* MODEL:START */` and `/* MODEL:END */` markers is
+pure and DOM-free, so it can be sliced out and run in Node — which is how it
+is tested, there being no test framework in the repo:
+
+```bash
+sed -n '/MODEL:START/,/MODEL:END/p' src/App.jsx > /tmp/model.js
+# append your assertions, then: node /tmp/model.js
+```
+
+Anything you add inside those markers must stay free of React, the DOM and
+`window`, or that slice stops running.
 
 Country rules live in one `REGIONS` object as a profile of small functions:
 `monthlyRate`, `transferTax`, `mortgageInsurance`, `minDownPct`, `gainExclusion`
