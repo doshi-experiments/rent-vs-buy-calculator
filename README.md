@@ -1,11 +1,12 @@
 # Rent vs Buy — Canada & the United States
 
 A self-contained rent-versus-buy calculator that runs on either country's rules.
-Five tabs:
+Six tabs:
 
 - **Rent vs. buy** — net worth either way over your horizon, after costs and taxes
 - **Appreciation calculator** — compound growth between two values
 - **Payment comparison** — up to five prices or mortgage amounts against one set of conditions, side by side
+- **Prepayment** — extra payments or a target amortization, against the opportunity cost of investing the difference instead
 - **Two properties** — two homes compared in full, including suite income and renovations, with the work funded from investments or a line of credit
 - **Investment property** — buy and rent out, with up to six units, cap rate, cash-on-cash, DSCR and depreciation
 
@@ -206,6 +207,36 @@ Units follow the `CMP_SLOTS` precedent — six fixed slots, blanks dropping out,
 no dynamic add and remove. The "same rent for every unit" toggle **derives**
 from unit 1 rather than writing into the other slots, so switching it back
 restores the per-unit figures exactly.
+
+### The prepayment tab
+
+`simulatePrepay()` compares two households with the same mortgage and the same
+monthly outflow: one sends extra money to the lender and pays the loan off
+early, the other pays only the regular amount and invests the difference.
+Both finish debt-free by the **original** amortization date — the prepayer
+just gets there sooner, then redirects the freed-up payment into the market
+for whatever's left of the term.
+
+The comparison only means something if both households spend identically
+every month. That budget, `outAt(m)`, is defined off the do-nothing side's
+own balance (`investPmtAt`, built first as `investRun`) and never off the
+prepaying side's, so nothing downstream can make the two schedules drift
+apart — the outflow match is asserted, not merely hoped for. In Canada, where
+the payment resets every `ppTermYears` at a new rate, this also gets the
+behaviour right: the prepayer's freed-up cash automatically absorbs their own
+renewal surplus rather than reverting to whatever a smaller balance would
+newly require, which is what actually happens if you decline the lender's
+offer of a lower payment at renewal.
+
+The headline is the **hurdle rate** — the annual return above which investing
+the extras beats prepaying. It's found by bisecting on the two sides' final
+after-tax portfolio values, both of which are cheap to re-evaluate once the
+month-by-month schedules are built once. The US mortgage-interest deduction is
+modelled opt-in, crediting each side its own refund off its own average
+balance (never the difference to one side, which gets the spread right but
+the chart levels wrong); the Canadian prepayment privilege is a warning, never
+a block, and is exempt for lumps landing on a renewal month, since a payout
+made at renewal attracts no penalty at all.
 
 If you add an input, give it a short code in the `KEYS` map so it survives in shared links. Only values that differ from the defaults get written to the URL, so old links keep working when new inputs appear. The open tab travels in the URL too, as `tab=` — handled outside the `KEYS` map, and ignored by parsers that don't know it.
 

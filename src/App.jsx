@@ -210,6 +210,7 @@ const REGIONS = {
     acqDebtCap: Infinity,
     saltCap: Infinity,
     itemizes: false,                              // no mortgage interest deduction
+    hasPrepayPrivilege: true,                     // 10-20%/yr lump cap, most lenders
     defaults: {},                                 // DEFAULTS *is* the CA baseline
   },
 
@@ -235,6 +236,7 @@ const REGIONS = {
     acqDebtCap: 750000,
     saltCap: 10000,
     itemizes: true,
+    hasPrepayPrivilege: false,                    // no prepayment cap
     // Applied only on an explicit region flip — never merged into DEFAULTS,
     // so old shared links keep parsing as Canada.
     defaults: {
@@ -255,6 +257,7 @@ const REGIONS = {
       ivPrice: 400000, ivRate: 7.0, ivApprPct: 3.5, ivPropTaxPct: 1.1,
       ivInsYr: 2400, ivUtilYr: 1200, ivU1: 1500, ivU2: 1400,
       ivU3: 1400, ivU4: 1400, ivU5: 1400, ivU6: 1400,
+      ppLoan: 360000, ppRate: 6.5, ppAmort: 30, ppTermYears: 30, ppRenewalRate: 6.5,
     },
   },
 };
@@ -950,6 +953,320 @@ function simulateRental(p) {
     totEgi, totOpex, totInterest, totTax, totDep, totCF,
     accumDep, suspendedPAL, exitTax: exitTax(),
     finalValue: homeValue, finalBalance: balance,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ *  Mortgage prepayment
+ *
+ *  Two households, same mortgage, same monthly outflow. One sends extra
+ *  money to the lender and pays the loan off early; the other pays only
+ *  the regular amount and invests the difference. Both finish debt-free
+ *  by the ORIGINAL amortization date — the prepayer just gets there
+ *  early, then redirects the freed-up payment into the market for
+ *  whatever's left of the term.
+ *
+ *  The integrity of the comparison rests on one rule: every month, both
+ *  households spend exactly the same amount. `outAt(m)` is that shared
+ *  budget. It is defined off the INVEST side's own balance (the
+ *  do-nothing counterfactual, built first as `investRun`) and never off
+ *  the prepay side's — so nothing downstream can make the two schedules
+ *  drift apart. In Canada, where the payment resets every `termMonths`
+ *  at a new rate, this also matters for realism: it is what makes the
+ *  prepayer's freed-up cash automatically absorb their own renewal
+ *  surplus rather than reverting to whatever a smaller balance would
+ *  newly require.
+ * ------------------------------------------------------------------ */
+function simulatePrepay(p) {
+  if (typeof p.us !== "boolean") throw new Error("region flag `us` must be boolean");
+  const R = REGIONS[p.us ? "us" : "ca"];
+  const loan = Math.max(0, p.ppLoan);
+  const n = Math.max(1, Math.round(p.ppAmort * 12));
+  const termMonths = R.renews ? Math.max(1, Math.round(p.ppTermYears * 12)) : n;
+  const marg = p.marginalTaxPct / 100;
+  const itemizing = !!p.ppDeduct && R.itemizes;
+
+  if (loan <= 0) {
+    return {
+      loan: 0, basePmt: 0, amortMonths: n, termMonths, renews: R.renews,
+      modeB: !!p.ppMode, targetMonths: n, modeBPmt: 0, derivedExtra: 0,
+      targetTooLong: false, modeBPmtByTerm: null,
+      monthlyExtra: 0, biweeklyExtra: 0, annualLump: 0, oneTimeLump: 0,
+      oneTimeMonth: 0, oneTimeDropped: false,
+      payoffMonth: 0, monthsSaved: 0, yearsSaved: 0,
+      prepayInterest: 0, investInterest: 0, interestSaved: 0,
+      prepayNet: 0, investNet: 0, advantage: 0, crossover: null,
+      freedMonths: 0, freedMonthly: 0,
+      hurdle: null, hurdleNet: null, hurdleVsRate: null, effectiveRate: 0,
+      hurdleReason: "no-loan",
+      renewals: [],
+      itemizing: false, prepayRefund: 0, investRefund: 0, refundForfeited: 0,
+      hasPrivilege: R.hasPrepayPrivilege, privilege: null,
+      series: [{ t: 0, prepay: 0, invest: 0 }], years: [],
+      outflowMismatch: 0,
+    };
+  }
+
+  // A plain amortization run to `totalMonths`, renewing (rate resets, payment
+  // recalculated on the balance remaining) exactly like simulate()'s main
+  // loop. Used both for the do-nothing baseline (totalMonths = n) and, in
+  // Mode B, for the shorter target run whose payment IS the answer.
+  function buildAmortRun(totalMonths) {
+    let balance = loan;
+    let i = R.monthlyRate(p.ppRate);
+    let pmt = payment(balance, i, totalMonths);
+    const pmtByMonth = [];
+    for (let m = 1; m <= totalMonths; m++) {
+      if (R.renews && m > 1 && (m - 1) % termMonths === 0) {
+        i = R.monthlyRate(p.ppRenewalRate);
+        pmt = payment(balance, i, totalMonths - (m - 1));
+      }
+      pmtByMonth.push(pmt);
+      const interest = balance * i;
+      const principal = Math.min(Math.max(pmt - interest, 0), balance);
+      balance = Math.max(0, balance - principal);
+      if (balance < 0.005) balance = 0;       // float dust; see line ~638
+    }
+    return { pmtByMonth };
+  }
+
+  const investRun = buildAmortRun(n);
+  const investPmtAt = (m) => investRun.pmtByMonth[m - 1];
+  const basePmt = investRun.pmtByMonth[0];
+
+  const modeB = !!p.ppMode;
+  let targetMonths = n, targetTooLong = false, modeBRun = null;
+  if (modeB) {
+    targetMonths = Math.max(1, Math.round(p.ppTargetAmort * 12));
+    if (targetMonths >= n) { targetTooLong = true; targetMonths = Math.max(1, n - 1); }
+    modeBRun = buildAmortRun(targetMonths);
+  }
+  const modeBPmt = modeB ? modeBRun.pmtByMonth[0] : null;
+  const derivedExtra = modeB ? Math.max(0, modeBPmt - basePmt) : 0;
+
+  // Mode A's four levers. Disabled in Mode B — a lump would make the "done
+  // in exactly Y years" headline false, since payoff would land before the
+  // year the user typed, and bi-weekly is redundant once the payment
+  // itself has already been solved for.
+  const monthlyExtra = modeB ? 0 : Math.max(0, p.ppExtraMo);
+  const biweeklyExtra = modeB ? 0 : (p.ppBiweekly ? basePmt / 12 : 0);
+  const annualLump = modeB ? 0 : Math.max(0, p.ppAnnualLump);
+  const oneTimeLumpRaw = modeB ? 0 : Math.max(0, p.ppOneTime);
+  const anniv = Math.min(12, Math.max(1, Math.round(p.ppAnnivMonth || 12)));
+  const oneTimeYear = Math.max(1, Math.round(p.ppOneTimeYear || 1));
+  const oneTimeMonth = (oneTimeYear - 1) * 12 + anniv;
+  const oneTimeDropped = oneTimeLumpRaw > 0 && oneTimeMonth > n;
+  const oneTimeLump = oneTimeDropped ? 0 : oneTimeLumpRaw;
+
+  const extraAt = (m) => monthlyExtra + biweeklyExtra
+    + (annualLump > 0 && m % 12 === anniv % 12 ? annualLump : 0)
+    + (m === oneTimeMonth ? oneTimeLump : 0);
+
+  // The shared household budget — see the comment at the top of this
+  // function. Reads only the INVEST side (`investPmtAt`, `modeBRun`),
+  // never the prepay side, so the two schedules cannot drift apart.
+  const outAt = (m) => modeB
+    ? (m <= targetMonths ? modeBRun.pmtByMonth[m - 1] : modeBRun.pmtByMonth[targetMonths - 1])
+    : investPmtAt(m) + extraAt(m);
+
+  // One builder for both sides — they differ only in how much of `outAt`
+  // the lender gets. Whatever is left over (`toMarket`) is identical in
+  // total between the two by construction; only the split changes.
+  function buildSide(attackAt) {
+    let balance = loan;
+    let i = R.monthlyRate(p.ppRate);
+    let payoffMonth = null, totInterest = 0, totPaid = 0;
+    let yrInt = 0, yrBalSum = 0, yrMonths = 0;
+    const contrib = [], rows = [];
+    for (let m = 1; m <= n; m++) {
+      if (R.renews && m > 1 && (m - 1) % termMonths === 0) {
+        i = R.monthlyRate(p.ppRenewalRate);
+      }
+      const balOpen = balance;
+      const interest = balOpen * i;
+      const attack = attackAt(m);
+      const principal = Math.min(Math.max(attack - interest, 0), balOpen);
+      balance = Math.max(0, balOpen - principal);
+      if (balance < 0.005) balance = 0;
+      const paid = balOpen > 0 ? interest + principal : 0;
+      totPaid += paid;
+      totInterest += interest;
+      const toMarket = outAt(m) - paid;     // the stub, then the whole payment
+      if (balance === 0 && payoffMonth === null) payoffMonth = m;
+
+      // US mortgage-interest deduction, opt-in. Each side gets its own
+      // refund off its own average balance — crediting the difference to
+      // one side instead gets the spread right but the chart levels wrong.
+      yrInt += interest; yrBalSum += balOpen; yrMonths += 1;
+      let refund = 0;
+      if (itemizing && (m % 12 === 0 || m === n)) {
+        const avgBal = yrBalSum / Math.max(1, yrMonths);
+        refund = marg * yrInt * Math.min(1, R.acqDebtCap / Math.max(avgBal, 1));
+        yrInt = 0; yrBalSum = 0; yrMonths = 0;
+      }
+
+      contrib.push(toMarket + refund);
+      rows.push({ balance, balOpen, interest, principal, paid, toMarket, refund });
+    }
+    return { contrib, rows, payoffMonth: payoffMonth === null ? n : payoffMonth, totInterest, totPaid };
+  }
+
+  const prepaySide = buildSide(outAt);
+  const investSide = buildSide(investPmtAt);
+
+  // Grow-then-contribute, same idiom as simulate()/simulateRental() (lines
+  // ~339, ~800): a month's contribution earns nothing in its own month.
+  function growFull(stream, annualPct) {
+    const mInv = Math.pow(1 + Math.max(-99, annualPct - p.feeDragPct) / 100, 1 / 12);
+    let port = 0, basis = 0;
+    for (let k = 0; k < stream.length; k++) { port *= mInv; port += stream[k]; basis += stream[k]; }
+    return { port, basis, afterTax: port - Math.max(0, port - basis) * (p.capGainsPct / 100) };
+  }
+  function growSeries(side, annualPct) {
+    const mInv = Math.pow(1 + Math.max(-99, annualPct - p.feeDragPct) / 100, 1 / 12);
+    let port = 0, basis = 0;
+    const net = [];
+    for (let k = 0; k < side.rows.length; k++) {
+      port *= mInv; port += side.contrib[k]; basis += side.contrib[k];
+      net.push(port - Math.max(0, port - basis) * (p.capGainsPct / 100) - side.rows[k].balance);
+    }
+    return net;
+  }
+
+  const prepayPort = growFull(prepaySide.contrib, p.investPct);
+  const investPort = growFull(investSide.contrib, p.investPct);
+  const advantage = prepayPort.afterTax - investPort.afterTax;
+
+  // The hurdle: the annual return above which investing the extras beats
+  // prepaying. Both sides are re-run at each trial rate — the prepay side
+  // invests too, from its payoff month onward — but only through the cheap
+  // scalar growFull(), never the month-by-month schedules again.
+  const hasExtras = modeB ? derivedExtra > 1e-6
+    : (monthlyExtra > 0 || biweeklyExtra > 0 || annualLump > 0 || oneTimeLump > 0);
+  const spread = (x) => growFull(prepaySide.contrib, x).afterTax - growFull(investSide.contrib, x).afterTax;
+  let hurdle = null, hurdleReason = null;
+  if (!hasExtras) {
+    hurdleReason = "no-extras";
+  } else {
+    let lo = 0, hi = 25, sLo = spread(0), sHi = spread(25);
+    if (sHi > 0) { hi = 60; sHi = spread(60); }        // needed above ~18% mortgage rates
+    if (sLo <= 0 || sHi > 0) {
+      hurdleReason = "out-of-range";
+    } else {
+      for (let iter = 0; iter < 40 && hi - lo > 0.01; iter++) {
+        const mid = (lo + hi) / 2;
+        if (spread(mid) > 0) lo = mid; else hi = mid;
+      }
+      hurdle = (lo + hi) / 2;
+    }
+  }
+  const hurdleNet = hurdle === null ? null : hurdle - p.feeDragPct;
+
+  // Balance-weighted average rate over the loan's life — the fair thing to
+  // measure the hurdle against once a Canadian renewal has put more than
+  // one rate on the loan.
+  const balSum = investSide.rows.reduce((s, r) => s + r.balOpen, 0);
+  const effectiveRate = balSum > 0 ? (investSide.totInterest / balSum) * 12 * 100 : p.ppRate;
+  const hurdleVsRate = hurdle === null ? null : hurdle - effectiveRate;
+
+  const monthsSaved = Math.max(0, n - prepaySide.payoffMonth);
+  const freedMonths = monthsSaved;
+  const freedMonthly = prepaySide.payoffMonth < n ? outAt(Math.min(prepaySide.payoffMonth + 1, n)) : 0;
+
+  const prepayRefund = prepaySide.rows.reduce((s, r) => s + r.refund, 0);
+  const investRefund = investSide.rows.reduce((s, r) => s + r.refund, 0);
+
+  // Renewal exposure: same household outflow either way, but the
+  // prepayer's smaller balance means a smaller payment jump when the rate
+  // resets — this is the case for prepaying that is invisible in the US.
+  const renewalMonths = [];
+  if (R.renews) for (let m = termMonths + 1; m <= n; m += termMonths) renewalMonths.push(m);
+  const renewals = renewalMonths.map((m) => ({
+    month: m, year: m / 12,
+    investBalance: investSide.rows[m - 2].balance, investPmt: investPmtAt(m),
+    prepayBalance: prepaySide.rows[m - 2].balance, prepayPmt: outAt(m),
+  }));
+  const modeBPmtByTerm = modeB
+    ? [{ month: 1, pmt: modeBRun.pmtByMonth[0] },
+       ...renewalMonths.filter((m) => m <= targetMonths).map((m) => ({ month: m, pmt: modeBRun.pmtByMonth[m - 1] }))]
+    : null;
+
+  // Canadian prepayment privilege — warn, never block. Resets every
+  // mortgage year; a lump landing on the renewal month itself is exempt,
+  // since a payout made at renewal attracts no penalty at all.
+  let privilege = null;
+  if (R.hasPrepayPrivilege) {
+    const cap = loan * (Math.max(0, p.ppPrivilegePct) / 100);
+    let worstYear = 0, worstPct = 0, breached = false, yrExtra = 0;
+    for (let m = 1; m <= prepaySide.payoffMonth; m++) {
+      const isRenewalMonth = R.renews && m > 1 && (m - 1) % termMonths === 0;
+      if (!isRenewalMonth) yrExtra += Math.max(0, prepaySide.rows[m - 1].paid - investPmtAt(m));
+      if (m % 12 === 0 || m === prepaySide.payoffMonth) {
+        const pct = cap > 0 ? (yrExtra / cap) * 100 : 0;
+        if (pct > worstPct) { worstPct = pct; worstYear = Math.ceil(m / 12); }
+        if (yrExtra > cap + 1e-6) breached = true;
+        yrExtra = 0;
+      }
+    }
+    const paymentIncreasePct = basePmt > 0 ? (monthlyExtra / basePmt) * 100 : 0;
+    privilege = {
+      cap, worstYear, worstYearPct: worstPct, breached,
+      paymentIncreasePct, paymentIncreaseBreached: paymentIncreasePct > p.ppPrivilegePct,
+    };
+  }
+
+  const prepayNetSeries = growSeries(prepaySide, p.investPct);
+  const investNetSeries = growSeries(investSide, p.investPct);
+  const series = [{ t: 0, prepay: -loan, invest: -loan }];
+  const years = [];
+  let pIntYr = 0, iIntYr = 0;
+  for (let m = 1; m <= n; m++) {
+    series.push({ t: m / 12, prepay: prepayNetSeries[m - 1], invest: investNetSeries[m - 1] });
+    pIntYr += prepaySide.rows[m - 1].interest;
+    iIntYr += investSide.rows[m - 1].interest;
+    if (m % 12 === 0 || m === n) {
+      years.push({
+        year: Math.ceil(m / 12),
+        prepayBalance: prepaySide.rows[m - 1].balance, investBalance: investSide.rows[m - 1].balance,
+        prepayInterestYr: pIntYr, investInterestYr: iIntYr,
+      });
+      pIntYr = 0; iIntYr = 0;
+    }
+  }
+  // The first point from which investing stays ahead for the rest of the
+  // horizon. Both series start tied at -loan, so the "holds for the rest"
+  // clause is what keeps that opening tie from reading as a crossover.
+  let crossover = null;
+  for (let k = 0; k < series.length; k++) {
+    if (series[k].invest >= series[k].prepay && series.slice(k).every((d) => d.invest >= d.prepay)) {
+      crossover = series[k].t; break;
+    }
+  }
+
+  // Integrity diagnostic: both sides' total spend must match every month.
+  // Should be ~0 always, by construction — see the comment on `outAt`.
+  let outflowMismatch = 0;
+  for (let m = 1; m <= n; m++) {
+    const a = prepaySide.rows[m - 1].paid + prepaySide.rows[m - 1].toMarket;
+    const b = investSide.rows[m - 1].paid + investSide.rows[m - 1].toMarket;
+    if (Math.abs(a - b) > outflowMismatch) outflowMismatch = Math.abs(a - b);
+  }
+
+  return {
+    loan, basePmt, amortMonths: n, termMonths, renews: R.renews,
+    modeB, targetMonths, modeBPmt, derivedExtra, targetTooLong, modeBPmtByTerm,
+    monthlyExtra, biweeklyExtra, annualLump, oneTimeLump, oneTimeMonth, oneTimeDropped,
+    payoffMonth: prepaySide.payoffMonth, monthsSaved, yearsSaved: monthsSaved / 12,
+    prepayInterest: prepaySide.totInterest, investInterest: investSide.totInterest,
+    interestSaved: investSide.totInterest - prepaySide.totInterest,
+    prepayNet: prepayPort.afterTax, investNet: investPort.afterTax, advantage,
+    crossover, freedMonths, freedMonthly,
+    hurdle, hurdleNet, hurdleVsRate, effectiveRate, hurdleReason,
+    renewals,
+    itemizing, prepayRefund, investRefund, refundForfeited: investRefund - prepayRefund,
+    hasPrivilege: R.hasPrepayPrivilege, privilege,
+    series, years,
+    outflowMismatch,
   };
 }
 
@@ -2639,6 +2956,368 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Mortgage prepayment
+ * ------------------------------------------------------------------ */
+function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
+  const R = REGIONS[p.us ? "us" : "ca"];
+  const us = !!p.us;
+  const modeB = !!p.ppMode;
+  const noLoan = pp.loan <= 0;
+  const ahead = pp.advantage >= 0;
+
+  const headline = noLoan
+    ? "Enter a mortgage to see what prepaying it is worth."
+    : pp.hurdleReason === "no-extras"
+    ? "Add an extra payment to see what it's worth."
+    : pp.hurdle === null
+    ? "Prepaying wins at any plausible return."
+    : (
+      <>
+        Investing instead beats prepaying above{" "}
+        <span style={{ color: C.rent, borderBottom: "3px solid " + C.rent }}>
+          {trim(pp.hurdle)}%
+        </span>{" "}
+        a year.
+      </>
+    );
+
+  return (
+    <>
+      {/* ---- the verdict ---- */}
+      <Panel className="mb-5">
+        <Eyebrow>
+          Prepayment · {us ? "United States" : "British Columbia"} · pay down
+          the mortgage, or invest the difference
+        </Eyebrow>
+        <h1 style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+          {headline}
+        </h1>
+        <p style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 8, maxWidth: 820, lineHeight: 1.5 }}>
+          A mortgage prepayment is a guaranteed, tax-free return equal to your
+          rate. The market is a higher expected return that is neither
+          guaranteed nor tax-free. The hurdle above is where those two trade
+          off — it barely moves with how hard you prepay, because it is a
+          property of your rate and your tax, not of the extra payment.
+        </p>
+
+        <div className="rvb-metrics mt-4">
+          <Metric
+            label="Paid off in"
+            value={noLoan ? "—" : trim(pp.payoffMonth / 12) + " yr"}
+            note={noLoan ? undefined
+              : pp.monthsSaved > 0
+              ? trim(pp.monthsSaved / 12) + " years earlier"
+              : "same as the original schedule"}
+          />
+          <Metric
+            label="Interest saved"
+            value={noLoan ? "—" : usd(pp.interestSaved)}
+            note={noLoan ? undefined : "vs. " + usd(pp.investInterest) + " without prepaying"}
+          />
+          <Metric
+            label="Hurdle rate"
+            value={pp.hurdle === null ? "—" : trim(pp.hurdle) + "%"}
+            note={pp.hurdleVsRate === null ? undefined
+              : (pp.hurdleVsRate >= 0 ? "+" : "") + trim(pp.hurdleVsRate) + "pp over your effective rate"}
+            tip="The annual return the market would have to clear for investing the extras to beat prepaying, evaluated at the end of the original amortization."
+          />
+          <Metric
+            label={"At " + trim(p.investPct) + "%, advantage of"}
+            value={noLoan ? "—" : usd(Math.abs(pp.advantage)) + (ahead ? " prepaying" : " investing")}
+            tone={noLoan ? undefined : ahead ? C.buy : C.rent}
+            note="using the return you set below"
+          />
+        </div>
+      </Panel>
+
+      {/* ---- terms + levers ---- */}
+      <div className="rvb-pair mb-5">
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Mortgage terms</h2>
+          <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 12 }}>
+            A standalone loan — not tied to the price on the first tab.
+          </p>
+          <div className="rvb-fields">
+            <Field label="Mortgage amount" prefix="$" step={10000} value={raw.ppLoan} onChange={set("ppLoan")} />
+            <Field label="Interest rate" suffix="%" step={0.05} value={raw.ppRate} onChange={set("ppRate")} />
+            <Field label="Amortization" suffix="yr" step={1} value={raw.ppAmort} onChange={set("ppAmort")} />
+            {R.renews && (
+              <Field label="Term" suffix="yr" step={1} value={raw.ppTermYears} onChange={set("ppTermYears")} />
+            )}
+            {R.renews && (
+              <Field label="Rate at renewal" suffix="%" step={0.05} value={raw.ppRenewalRate}
+                     onChange={set("ppRenewalRate")} hint="The big unknown" />
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onCopyConditions}
+            style={{
+              marginTop: 14, fontFamily: SANS, fontSize: 12, color: C.buy,
+              background: "transparent", border: "1px solid " + C.line,
+              borderRadius: 3, padding: "7px 11px", cursor: "pointer",
+            }}
+          >
+            Use my rent-vs-buy conditions
+          </button>
+        </Panel>
+
+        <Panel>
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 10 }}>How you're paying it down</h2>
+          <Segmented
+            options={[[false, "Add extra payments"], [true, "Target an amortization"]]}
+            value={modeB}
+            onChange={set("ppMode")}
+          />
+
+          {modeB ? (
+            <>
+              <div className="rvb-fields mt-3">
+                <Field
+                  label="Pay it off in" suffix="yr" step={1}
+                  value={raw.ppTargetAmort} onChange={set("ppTargetAmort")}
+                  hint={!noLoan && pp.modeBPmt
+                    ? usd(pp.modeBPmt) + "/mo to start, vs " + usd(pp.basePmt) + " today"
+                    : undefined}
+                />
+              </div>
+              <p style={{ fontFamily: SANS, fontSize: 11, color: C.mute, marginTop: 10, lineHeight: 1.5 }}>
+                The extra-payment levers are off in this mode: a lump sum would
+                make the target date wrong, and bi-weekly is redundant once the
+                payment has already been solved for.
+                {pp.targetTooLong && (
+                  <><br /><span style={{ color: C.signal }}>
+                    {trim(p.ppTargetAmort)} years isn't shorter than the{" "}
+                    {trim(p.ppAmort)}-year amortization, so the closest valid
+                    target is shown instead.
+                  </span></>
+                )}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="rvb-fields mt-3">
+                <Field label="Extra payment" prefix="$" suffix="/mo" step={25}
+                       value={raw.ppExtraMo} onChange={set("ppExtraMo")} />
+                <Field label="Annual lump sum" prefix="$" step={500}
+                       value={raw.ppAnnualLump} onChange={set("ppAnnualLump")}
+                       hint="Applied once a year, on the loan's anniversary" />
+                <Field label="One-time lump sum" prefix="$" step={1000}
+                       value={raw.ppOneTime} onChange={set("ppOneTime")} />
+                <Field label="In year" step={1}
+                       value={raw.ppOneTimeYear} onChange={set("ppOneTimeYear")} />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 10 }}>
+                <input type="checkbox" checked={!!raw.ppBiweekly}
+                       onChange={(e) => set("ppBiweekly")(e.target.checked)}
+                       style={{ accentColor: C.buy, width: 14, height: 14 }} />
+                <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+                  Accelerated bi-weekly (one extra monthly payment a year)
+                </span>
+              </label>
+              {p.ppBiweekly && (
+                <p style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 8, lineHeight: 1.5 }}>
+                  Modelled as that extra payment spread evenly across the
+                  months; a true 26-payment schedule pays off one to three
+                  months sooner than shown, so this is the conservative figure.
+                </p>
+              )}
+              {pp.oneTimeDropped && (
+                <p style={{ fontFamily: SANS, fontSize: 10.5, color: C.signal, marginTop: 8, lineHeight: 1.5 }}>
+                  That lump lands after the mortgage would already be paid
+                  off, so it isn't applied.
+                </p>
+              )}
+            </>
+          )}
+        </Panel>
+      </div>
+
+      {/* ---- what the money would otherwise have done ---- */}
+      <Panel className="mb-5">
+        <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Opportunity cost</h2>
+        <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 14, maxWidth: 860, lineHeight: 1.5 }}>
+          The hurdle above turns on this rate more than anything else on the
+          page. It's shared with the other tabs — change it here and every
+          answer that depends on it moves too.
+        </p>
+        <div className="rvb-fields">
+          <Field label="Expected return" suffix="%/yr" step={0.5}
+                 value={raw.investPct} onChange={set("investPct")}
+                 tip="What the extra payments would have earned in the market instead." />
+          <Field label="Fees and tax drag" suffix="%/yr" step={0.1}
+                 value={raw.feeDragPct} onChange={set("feeDragPct")}
+                 hint={"Net " + trim(Math.max(0, p.investPct - p.feeDragPct)) + "%/yr after fees"} />
+          <Field label="Tax on investment gains" suffix="%" step={1}
+                 value={raw.capGainsPct} onChange={set("capGainsPct")}
+                 tip={us
+                   ? "Charged on the growth when the investments are sold at the end. Set it to 0 if the money would sit in a Roth."
+                   : "Charged on the growth when the investments are sold at the end. Set it to 0 if the money would sit in a TFSA."} />
+          <Field label="Your marginal tax rate" suffix="%" step={1}
+                 value={raw.marginalTaxPct} onChange={set("marginalTaxPct")}
+                 tip="The rate on the next dollar you earn." />
+        </div>
+
+        {R.itemizes && (
+          <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 4 }}>
+            <input type="checkbox" checked={!!raw.ppDeduct}
+                   onChange={(e) => set("ppDeduct")(e.target.checked)}
+                   style={{ accentColor: C.buy, width: 14, height: 14 }} />
+            <span style={{ fontFamily: SANS, fontSize: 12.5 }}>
+              I itemize, and my other deductions already exceed the standard
+              deduction — credit the mortgage-interest deduction to the side
+              that's paying more interest
+            </span>
+          </label>
+        )}
+
+        <div style={{ marginTop: 16, borderTop: "1px solid " + C.line, paddingTop: 12 }}>
+          <Eyebrow>What counts as opportunity cost here</Eyebrow>
+          <div className="mt-2">
+            <Row label="If you prepay: portfolio from the freed-up payment, once the mortgage is gone"
+                 value={noLoan ? "—" : usd(pp.prepayNet)}
+                 tip="Every extra dollar goes to the lender until payoff, then the entire former payment goes to the market for whatever's left of the term." />
+            <Row label="If you invest instead: portfolio from the extras, from month one"
+                 value={noLoan ? "—" : usd(pp.investNet)}
+                 tip="The mortgage runs its full original course; the extra dollars go to the market immediately instead." />
+            <Row label="Difference at the end of the original amortization" strong
+                 value={noLoan ? "—" : usd(pp.advantage)}
+                 tone={noLoan ? undefined : ahead ? C.buy : C.rent} />
+          </div>
+          {pp.itemizing && (
+            <p style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 10, lineHeight: 1.5 }}>
+              Prepaying also forfeits some of the mortgage-interest deduction —{" "}
+              {usd(Math.max(0, pp.refundForfeited))} of it, credited back to
+              whichever side paid the interest.
+            </p>
+          )}
+        </div>
+      </Panel>
+
+      {/* ---- renewal exposure, Canada only ---- */}
+      {pp.renews && pp.renewals.length > 0 && (
+        <Panel className="mb-5">
+          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Renewal exposure</h2>
+          <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 12, maxWidth: 860, lineHeight: 1.5 }}>
+            Every {trim(p.ppTermYears)} years the rate resets and the payment
+            is recalculated on whatever's left. A smaller balance means a
+            smaller jump — but your lender will offer the lower payment a
+            smaller balance qualifies for; you have to keep paying the fuller
+            amount for the surplus to keep prepaying the mortgage.
+          </p>
+          {pp.renewals.map((rn, idx) => (
+            <div key={idx} className="flex items-baseline justify-between"
+                 style={{ padding: "6px 0", borderBottom: idx === pp.renewals.length - 1 ? "none" : "1px dotted " + C.line, gap: 10 }}>
+              <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>Year {trim(rn.year)}</span>
+              <span style={{ fontFamily: MONO, fontSize: 12 }}>
+                <span style={{ color: C.rent }}>invest {usd(rn.investPmt)}/mo</span>
+                <span style={{ color: C.mute }}> (bal {usd(rn.investBalance)})  ·  </span>
+                <span style={{ color: C.buy }}>prepay {usd(rn.prepayPmt)}/mo</span>
+                <span style={{ color: C.mute }}> (bal {usd(rn.prepayBalance)})</span>
+              </span>
+            </div>
+          ))}
+        </Panel>
+      )}
+
+      {/* ---- prepayment privilege warning, Canada only ---- */}
+      {pp.hasPrivilege && pp.privilege && pp.privilege.breached && (
+        <div className="mb-5" style={{
+          background: C.rentWash, border: "1px solid " + C.line, borderRadius: 4,
+          padding: "12px 16px", fontFamily: SANS, fontSize: 11.5, color: C.rent, lineHeight: 1.5,
+        }}>
+          In year {pp.privilege.worstYear} your extra payments reach{" "}
+          {trim(pp.privilege.worstYearPct)}% of the original principal — over
+          most lenders' {trim(p.ppPrivilegePct)}% annual prepayment privilege.
+          The excess may draw an IRD or three-months'-interest charge, unless
+          it lands on a renewal month, when any amount is penalty-free.
+        </div>
+      )}
+
+      {/* ---- chart ---- */}
+      {!noLoan && (
+        <Panel>
+          <div className="flex items-baseline justify-between mb-1">
+            <h2 style={{ fontFamily: SERIF, fontSize: 21 }}>Net position over time</h2>
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-2">
+                <span style={{ width: 14, height: 3, background: C.buy, display: "inline-block" }} />
+                <span style={{ fontFamily: MONO, fontSize: 11, color: C.buy }}>Prepay</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <span style={{ width: 14, height: 3, background: C.rent, display: "inline-block" }} />
+                <span style={{ fontFamily: MONO, fontSize: 11, color: C.rent }}>Invest instead</span>
+              </span>
+            </div>
+          </div>
+          <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 10 }}>
+            After-tax portfolio value minus whatever's still owed, at every
+            point along the way.
+          </p>
+          <div className="rvb-chart">
+            <ResponsiveContainer>
+              <ComposedChart data={pp.series} margin={{ top: 18, right: 10, bottom: 4, left: 0 }}>
+                <CartesianGrid stroke={C.line} vertical={false} />
+                <XAxis
+                  dataKey="t" type="number" domain={[0, pp.amortMonths / 12]}
+                  tickFormatter={(v) => (v === 0 ? "now" : "yr " + v)}
+                  tick={{ fontFamily: MONO, fontSize: 10.5, fill: C.mute }}
+                  stroke={C.line}
+                />
+                <YAxis
+                  tickFormatter={compact}
+                  tick={{ fontFamily: MONO, fontSize: 10.5, fill: C.mute }}
+                  stroke={C.line} width={58}
+                />
+                <Tooltip
+                  cursor={{ stroke: C.mute, strokeDasharray: "3 3" }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload || !payload.length) return null;
+                    const d = payload[0].payload;
+                    const lead = d.prepay - d.invest;
+                    return (
+                      <div style={{
+                        background: C.field, border: "1px solid " + C.line,
+                        borderRadius: 3, padding: "8px 10px", fontFamily: MONO, fontSize: 12,
+                      }}>
+                        <div style={{ color: C.mute, fontSize: 10.5, marginBottom: 4 }}>
+                          {d.t === 0 ? "Today" : "Year " + d.t.toFixed(1)}
+                        </div>
+                        <div style={{ color: C.buy }}>Prepay · {usd(d.prepay)}</div>
+                        <div style={{ color: C.rent }}>Invest · {usd(d.invest)}</div>
+                        <div style={{ color: C.ink, marginTop: 4, borderTop: "1px solid " + C.line, paddingTop: 4 }}>
+                          {lead >= 0 ? "Prepay" : "Invest"} ahead {usd(Math.abs(lead))}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                {pp.payoffMonth < pp.amortMonths && (
+                  <ReferenceLine
+                    x={pp.payoffMonth / 12} stroke={C.signal} strokeWidth={2}
+                    label={{ value: "paid off", position: "top", offset: 6,
+                             fontFamily: MONO, fontSize: 10, fill: C.signal }}
+                  />
+                )}
+                {pp.crossover !== null && pp.crossover > 0 && (
+                  <ReferenceLine
+                    x={pp.crossover} stroke={C.mute} strokeDasharray="3 3"
+                    label={{ value: "invest overtakes", position: "top", offset: 6,
+                             fontFamily: MONO, fontSize: 10, fill: C.mute }}
+                  />
+                )}
+                <Line dataKey="prepay" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
+                <Line dataKey="invest" stroke={C.rent} strokeWidth={2} dot={false} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
  *  Main
  * ------------------------------------------------------------------ */
 const DEFAULTS = {
@@ -2731,6 +3410,13 @@ const DEFAULTS = {
   ivPropTaxPct: 0.36, ivInsYr: 2600, ivHoaMo: 0, ivUtilYr: 1400, ivOtherYr: 600,
   ivMaintPct: 8, ivCapexPct: 5, ivMgmtPct: 8,
   ivInitialCapex: 0, ivBuildingPct: 60, ivCCA: false,
+  // Prepayment. Mirrors the buy tab's own loan (1450000 at 80%) so the two
+  // tabs agree by default; "Use my rent-vs-buy conditions" overwrites it.
+  ppLoan: 1160000, ppRate: 4.24, ppAmort: 25, ppTermYears: 5, ppRenewalRate: 4.24,
+  ppMode: false, ppTargetAmort: 15,
+  ppExtraMo: 500, ppAnnualLump: 0, ppAnnivMonth: 12,
+  ppOneTime: 0, ppOneTimeYear: 3, ppBiweekly: false,
+  ppDeduct: false, ppPrivilegePct: 20,
 };
 
 
@@ -2770,6 +3456,12 @@ const KEYS = {
   ivMaintPct: "3m", ivCapexPct: "3x", ivMgmtPct: "3w", ivHoaMo: "3h",
   ivUtilYr: "3l", ivOtherYr: "3o", ivInitialCapex: "3c", ivBuildingPct: "3b",
   ivCCA: "3y",
+  // Prepayment tab. `4*` is free: 0/1/2/3 belong to the earlier tabs.
+  ppLoan: "4l", ppRate: "4r", ppAmort: "4q", ppTermYears: "4t", ppRenewalRate: "4w",
+  ppMode: "4o", ppTargetAmort: "4g",
+  ppExtraMo: "4e", ppAnnualLump: "4n", ppAnnivMonth: "4v",
+  ppOneTime: "41", ppOneTimeYear: "42", ppBiweekly: "4b",
+  ppDeduct: "4d", ppPrivilegePct: "4p",
 };
 const CODE_TO_KEY = Object.fromEntries(Object.entries(KEYS).map(([k, v]) => [v, k]));
 
@@ -2810,6 +3502,7 @@ const TABS = [
   ["buy", "Rent vs. buy"],
   ["appreciation", "Appreciation calculator"],
   ["payments", "Payment comparison"],
+  ["prepay", "Prepayment"],
   ["compare", "Two properties"],
   ["invest", "Investment property"],
 ];
@@ -2952,6 +3645,8 @@ export default function RentVsBuy() {
   }, [p, tab]);
   const iv = useMemo(
     () => (tab === "invest" ? simulateRental(p) : null), [p, tab]);
+  const pp = useMemo(
+    () => (tab === "prepay" ? simulatePrepay(p) : null), [p, tab]);
 
   // Appreciation tool
   const appr = useMemo(() => {
@@ -3297,6 +3992,23 @@ export default function RentVsBuy() {
             onApply={(v) => {
               set("apprPct")(v.toFixed(2));
               setTab("buy");
+            }}
+          />
+        ) : tab === "prepay" ? (
+          <PrepayTab
+            raw={raw}
+            set={set}
+            p={p}
+            pp={pp}
+            onCopyConditions={() => {
+              setRaw((s) => ({
+                ...s,
+                ppLoan: String(Math.round(r.loan)),
+                ppRate: s.rate,
+                ppAmort: s.amortYears,
+                ppTermYears: s.termYears,
+                ppRenewalRate: s.renewalRate,
+              }));
             }}
           />
         ) : (
