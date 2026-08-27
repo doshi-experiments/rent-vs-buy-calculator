@@ -104,27 +104,62 @@ Because only non-default values are written, links made today keep working if th
 
 ---
 
-## SEO and link previews
+## Routing and SEO
 
-`src/static/index.html` carries a canonical URL, Open Graph and Twitter Card
-tags, and a `WebApplication` JSON-LD block — all pointing at
-`https://rent-vs-buy.rishabhdoshi.com/`, so update that URL in one place if
-the domain ever changes. `robots.txt` and `sitemap.xml` live beside it in
-`src/static/` and are copied straight into `dist/` by `build.sh`; there's
-only ever the one crawlable URL, since the tabs are hash-routed rather than
-separate pages.
+**`src/routes.json` is the single source of truth for the tabs.** It holds
+each tab's id, label, URL path, `<h1>`, `<title>`, meta description and
+no-JS lead paragraph. `App.jsx` imports it for routing; `build.sh` reads it
+to emit one real HTML file per route. Adding a tab means adding one row
+there — nothing else needs to know the list.
+
+Treat `path` values as permanent. Changing one orphans every link and every
+bit of search ranking pointing at it.
+
+### Why each tab is a real URL
+
+Tabs used to live in the fragment (`#tab=prepay`), which search engines do
+not index — six calculators collapsed into one indexable page. Now
+`build.sh` renders `src/static/index.template.html` once per route into its
+own directory (`dist/prepayment/index.html` and so on), substituting the
+`{{...}}` placeholders, so each tab has its own title, description,
+canonical and `<h1>`. Old `#tab=` links still work: the app rewrites one to
+its path on arrival, keeping the inputs in the hash.
+
+Because those pages are served from subdirectories, every asset reference in
+the template is **root-absolute** (`/app.js`, not `app.js`) — a relative one
+resolves to `/prepayment/app.js` and 404s. Same reason `main.jsx` registers
+`/sw.js` with an explicit root scope.
+
+`not_found_handling` is `"404-page"`, not `"single-page-application"`. The
+SPA catch-all answered *every* unknown URL with the app under a `200`, which
+Search Console reports as a soft 404; now unknown paths get `dist/404.html`
+with a real 404 status, and the app renders a matching not-found view rather
+than silently showing the rent-vs-buy tab.
+
+### The `<h1>` is the breadcrumb, not the verdict
+
+Each tab's big headline is a computed figure — "Buying leaves you $225,787
+richer" — which changes with every keystroke and contains no keywords, so it
+is a `<p>`. The small breadcrumb line above it is the `<h1>`, rendered via
+`<Eyebrow as="h1">`. Semantic level and font size are deliberately
+unrelated here. There must be exactly one `<h1>` per tab.
+
+### The rest
+
+`robots.txt` lives in `src/static/`; `sitemap.xml` is **generated** by
+`build.sh` from `routes.json` with a fresh `lastmod`, so don't hand-edit it.
+The service worker caches each route under its own path — serving one shared
+shell would give `/prepayment/` the home page's title and canonical.
 
 The social-preview image is `og-image.png`, base64-encoded into
 `icons.b64.json` alongside the app icons — the repo's convention for keeping
-binaries out of diffs — and decoded into `dist/` at build time like the rest
-of them. It's a static 1200×630 card, built once by hand from the app's own
-palette and fonts; regenerate it (any screenshot tool at that resolution
-works) if the tab list or tagline changes enough to make it stale.
+binaries out of diffs — and decoded into `dist/` at build time. It's a
+static 1200×630 card built from the app's own palette and fonts; regenerate
+it (any screenshot tool at that resolution) if the tab list or tagline
+changes enough to make it stale.
 
-The app itself is client-rendered — `<div id="root">` is empty until
-`app.js` runs — so the `<noscript>` block in `index.html` is what a crawler
-or JS-disabled visitor actually reads. Keep its description in sync with the
-`<meta name="description">` and Open Graph copy above it if either changes.
+The FAQ JSON-LD in `routes.json` is emitted on the home page only, since its
+answers describe the whole tool rather than any one tab.
 
 ---
 

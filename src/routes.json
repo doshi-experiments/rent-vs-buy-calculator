@@ -1,0 +1,90 @@
+{
+  "origin": "https://rent-vs-buy.rishabhdoshi.com",
+  "comment": [
+    "Single source of truth for the tabs. App.jsx imports this for routing and",
+    "for each page's <h1>; build.sh reads it to emit one real HTML file per",
+    "route, each with its own title, description and canonical. Adding a tab is",
+    "adding one row here — nothing else needs to know the list.",
+    "",
+    "`path` is what ships in the URL, so treat these as permanent: changing one",
+    "orphans every link and every bit of search ranking pointing at it."
+  ],
+  "routes": [
+    {
+      "id": "buy",
+      "label": "Rent vs. buy",
+      "path": "/",
+      "h1": "Rent vs. Buy Calculator",
+      "title": "Rent vs. Buy Calculator — Canada & the United States",
+      "description": "Free rent vs. buy calculator with real mortgage math for Canada and the US — semi-annual compounding, CMHC, closing costs, and taxes on both sides.",
+      "lead": "A free rent-versus-buy calculator for Canada and the United States. Compares net worth either way over your horizon, with real mortgage math, property taxes, closing costs, maintenance and capital gains counted on both sides."
+    },
+    {
+      "id": "appreciation",
+      "label": "Appreciation calculator",
+      "path": "/appreciation/",
+      "h1": "Home Appreciation Calculator",
+      "title": "Home Appreciation Calculator — Annual Growth Rate Between Two Values",
+      "description": "Work out the compound annual growth rate between what a home was worth then and what it is worth now, and feed that rate straight into a rent vs. buy comparison.",
+      "lead": "Work out the compound annual growth rate between two home values — what it sold for then, what it is worth now — and apply that rate directly to a rent-versus-buy comparison."
+    },
+    {
+      "id": "payments",
+      "label": "Payment comparison",
+      "path": "/payment-comparison/",
+      "h1": "Mortgage Payment Comparison Calculator",
+      "title": "Mortgage Payment Comparison Calculator — Canada & the United States",
+      "description": "Compare monthly mortgage payments across up to five purchase prices or loan amounts at once, with CMHC premiums and minimum down payments applied automatically.",
+      "lead": "Compare monthly mortgage payments across up to five purchase prices or loan amounts against one set of conditions, with minimum down payment rules and CMHC premiums applied automatically."
+    },
+    {
+      "id": "prepay",
+      "label": "Prepayment",
+      "path": "/prepayment/",
+      "h1": "Mortgage Prepayment Calculator",
+      "title": "Mortgage Prepayment Calculator — Pay Down the Mortgage or Invest?",
+      "description": "See how extra mortgage payments shorten your amortization, and whether investing that money instead would have beaten paying down the loan.",
+      "lead": "See how extra payments, annual lump sums or accelerated bi-weekly payments shorten your amortization — and whether investing that money instead would have beaten paying the mortgage down, after fees and tax."
+    },
+    {
+      "id": "compare",
+      "label": "Two properties",
+      "path": "/two-properties/",
+      "h1": "Compare Two Properties",
+      "title": "Compare Two Properties — Which Home Is the Better Buy?",
+      "description": "Run two homes through the same rent vs. buy model, including suite income and renovations funded from investments or a line of credit.",
+      "lead": "Run two homes through the same model and measure both against the same renting alternative, including suite income and renovations funded from investments or a line of credit."
+    },
+    {
+      "id": "invest",
+      "label": "Investment property",
+      "path": "/investment-property/",
+      "h1": "Investment Property Calculator",
+      "title": "Investment Property Calculator — Cap Rate, DSCR & Cash-on-Cash",
+      "description": "Analyze a rental property with up to six units: cap rate, cash-on-cash return, DSCR, depreciation and after-tax cash flow, for Canada or the US.",
+      "lead": "Analyze a rental property with up to six units — cap rate, cash-on-cash return, DSCR, depreciation and after-tax cash flow, on either Canadian or US tax rules."
+    }
+  ],
+  "faq": [
+    {
+      "q": "Is it better to rent or buy?",
+      "a": "It depends on how long you stay, what the home appreciates at, and what your money would otherwise earn invested. Buying carries large one-time costs — transfer tax, legal fees, and selling costs at the other end — that need years of appreciation to recover. This calculator compares net worth both ways over your own horizon rather than comparing rent against a mortgage payment, which ignores that a renter invests the difference."
+    },
+    {
+      "q": "Does this calculator work for Canada as well as the United States?",
+      "a": "Yes, and the mortgage mathematics genuinely differs between them rather than only the labels. Canadian fixed mortgages compound semi-annually and renew every few years at a new rate; US mortgages compound monthly and a 30-year fixed never renews. The calculator also handles CMHC premiums and BC property transfer tax on the Canadian side, and PMI, the mortgage-interest deduction and the SALT cap on the US side."
+    },
+    {
+      "q": "Should I pay off my mortgage early or invest the money instead?",
+      "a": "A mortgage prepayment is a guaranteed, tax-free return equal to your mortgage rate, while investing is a higher expected return that is neither guaranteed nor tax-free. The prepayment calculator solves for the hurdle rate — the annual return your investments would need to clear for investing to win — which is typically a little above your mortgage rate once fees and capital gains tax are counted."
+    },
+    {
+      "q": "Does it account for closing costs and taxes?",
+      "a": "Yes. Purchase costs include the down payment, land transfer or property transfer tax, and legal fees; ongoing costs include property tax, insurance, maintenance, utilities and strata or HOA dues. At the end, the sale pays selling costs and any capital gains tax, and the renting side pays capital gains tax on its portfolio, so neither side finishes holding an untaxed gain."
+    },
+    {
+      "q": "Is my data sent anywhere?",
+      "a": "No. The calculator runs entirely in your browser, there is no account or sign-up, and nothing you type is sent to a server. Your inputs are stored in the address bar, which is what makes a scenario shareable simply by copying the link."
+    }
+  ]
+}

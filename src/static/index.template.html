@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- TEMPLATE. build.sh renders one copy of this per entry in
+     src/routes.json, substituting the {{...}} placeholders, and writes each
+     to its own directory so every tab is a real URL with real metadata.
+     Never edit dist/ — edit this. -->
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="canonical" href="{{CANONICAL}}">
+<meta name="theme-color" content="#E7E9E3">
+<meta name="color-scheme" content="light dark">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rent vs Buy Calculator">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="{{DESCRIPTION}}">
+<meta property="og:url" content="{{CANONICAL}}">
+<meta property="og:image" content="{{ORIGIN}}/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rent vs. Buy Calculator for Canada and the United States">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{TITLE}}">
+<meta name="twitter:description" content="{{DESCRIPTION}}">
+<meta name="twitter:image" content="{{ORIGIN}}/og-image.png">
+<meta name="twitter:image:alt" content="Rent vs. Buy Calculator for Canada and the United States">
+
+<script type="application/ld+json">
+{{JSONLD}}
+</script>
+<!-- Theme is resolved before first paint, from a cookie scoped to
+     .rishabhdoshi.com so the choice carries over from the portfolio
+     and the experiments index. app.js is deferred, so without this the
+     dark-mode visitor gets a flash of the light shell on every load. -->
+<script>
+(function(){
+  var m=document.cookie.match(/(?:^|;\s*)sheet-theme=(light|dark)/),t=m&&m[1];
+  if(!t){ try{ t=localStorage.getItem('sheet-theme'); }catch(e){} }
+  if(t!=='light'&&t!=='dark')
+    t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+  var bg=t==='dark'?'#0E1C2B':'#E7E9E3';
+  var r=document.documentElement;
+  r.setAttribute('data-theme',t);
+  r.style.setProperty('--rvb-bg',bg);
+  r.style.colorScheme=t;
+  document.addEventListener('DOMContentLoaded',function(){
+    var mt=document.querySelector('meta[name="theme-color"]');
+    if(mt)mt.setAttribute('content',bg);
+  });
+})();
+</script>
+<!-- Root-absolute, not relative: these same tags are served from
+     /prepayment/ and the rest, where "app.js" would resolve to
+     /prepayment/app.js and 404. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.png" sizes="32x32">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rent vs Buy">
+<link rel="preload" href="/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/IBMPlexMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="root"></div>
+<!-- The app needs JavaScript to run the mortgage math, but a crawler or a
+     JS-disabled visitor should still find real words and real links here
+     rather than an empty shell. -->
+<noscript>
+  <div style="font-family:sans-serif;max-width:640px;margin:60px auto;padding:0 20px;line-height:1.6;color:#15181A">
+    <h1>{{H1}}</h1>
+    <p>{{LEAD}}</p>
+    <p>This calculator needs JavaScript to run. Please enable it in your
+       browser to use it.</p>
+    <p><b>All calculators:</b><br>{{NAVLINKS}}</p>
+    <p><a href="https://rishabhdoshi.com">rishabhdoshi.com</a> ·
+       <a href="https://experiments.rishabhdoshi.com">More experiments</a></p>
+  </div>
+</noscript>
+<script src="/app.js" defer></script>
+</body>
+</html>

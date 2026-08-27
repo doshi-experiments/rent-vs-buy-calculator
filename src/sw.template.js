@@ -2,28 +2,30 @@
 const VERSION = "__BUILD__";
 const CACHE = "rvb-" + VERSION;
 
-const SHELL = [
-  "./",
-  "index.html",
-  "app.js",
-  "app.css",
-  "manifest.webmanifest",
-  "icon.svg",
-  "favicon.png",
-  "apple-touch-icon.png",
-  "icon-192.png",
-  "icon-512.png",
-  "icon-maskable-512.png",
-  "fonts/IBMPlexSans-Regular.woff2",
-  "fonts/IBMPlexSans-Medium.woff2",
-  "fonts/IBMPlexSans-SemiBold.woff2",
-  "fonts/IBMPlexMono-Regular.woff2",
-  "fonts/IBMPlexMono-Medium.woff2",
-  "fonts/IBMPlexMono-SemiBold.woff2",
-  "fonts/IBMPlexSerif-Regular.woff2",
-  "fonts/IBMPlexSerif-Medium.woff2",
-  "fonts/IBMPlexSerif-SemiBold.woff2",
-];
+// Each tab is its own HTML file with its own title and canonical, so they
+// are cached individually. build.sh substitutes the list from routes.json.
+const ROUTES = __ROUTES__;
+
+const SHELL = ROUTES.concat([
+  "/app.js",
+  "/app.css",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/favicon.png",
+  "/apple-touch-icon.png",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon-maskable-512.png",
+  "/fonts/IBMPlexSans-Regular.woff2",
+  "/fonts/IBMPlexSans-Medium.woff2",
+  "/fonts/IBMPlexSans-SemiBold.woff2",
+  "/fonts/IBMPlexMono-Regular.woff2",
+  "/fonts/IBMPlexMono-Medium.woff2",
+  "/fonts/IBMPlexMono-SemiBold.woff2",
+  "/fonts/IBMPlexSerif-Regular.woff2",
+  "/fonts/IBMPlexSerif-Medium.woff2",
+  "/fonts/IBMPlexSerif-SemiBold.woff2",
+]);
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
@@ -46,18 +48,26 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Any navigation (including /#p=1450000...) is served by the cached shell
+  // Navigations are matched against their OWN path, never a single shared
+  // shell: serving the cached "/" for /prepayment/ would hand that page the
+  // home page's title and canonical. Network first so the metadata is
+  // fresh, cache as the offline fallback, then "/" as a last resort.
   if (req.mode === "navigate") {
+    const key = url.pathname.replace(/\/+$/, "") || "/";
     e.respondWith(
-      caches.match("index.html", { ignoreSearch: true }).then((hit) => {
-        const net = fetch(req)
-          .then((res) => {
-            if (res && res.ok) caches.open(CACHE).then((c) => c.put("index.html", res.clone()));
-            return res;
-          })
-          .catch(() => hit);
-        return hit || net;
-      })
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(key, copy));
+          }
+          return res;
+        })
+        .catch(() =>
+          caches
+            .match(key, { ignoreSearch: true })
+            .then((hit) => hit || caches.match("/", { ignoreSearch: true }))
+        )
     );
     return;
   }

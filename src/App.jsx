@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import routesData from "./routes.json";
 import {
   ComposedChart,
   Area,
@@ -1390,19 +1391,22 @@ function Info({ text, label }) {
   );
 }
 
-function Eyebrow({ children, tone }) {
+// `as` exists so a tab's breadcrumb line can BE the page's <h1> without
+// looking like one. Search engines read the tag; people read the size.
+function Eyebrow({ children, tone, as: Tag = "div" }) {
   return (
-    <div
+    <Tag
       style={{
         fontFamily: MONO,
         fontSize: 10.5,
         letterSpacing: "0.04em",
         color: tone || C.mute,
         fontWeight: 500,
+        margin: 0,
       }}
     >
       {children}
-    </div>
+    </Tag>
   );
 }
 
@@ -1646,8 +1650,8 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
   return (
     <>
       <header className="mb-7">
-        <Eyebrow>Compound annual growth rate</Eyebrow>
-        <h1
+        <Eyebrow as="h1">Home Appreciation Calculator · compound annual growth rate</Eyebrow>
+        <p
           style={{
             fontFamily: SERIF,
             fontWeight: 500,
@@ -1671,7 +1675,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
           ) : (
             <>Enter two values and a period.</>
           )}
-        </h1>
+        </p>
         <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, maxWidth: 640, marginTop: 12, lineHeight: 1.5 }}>
           Average annual growth isn't the total change divided by the years — growth compounds
           on itself. This works out the rate that actually gets you from one value to the other.
@@ -1901,7 +1905,11 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
       {/* ---- inputs ---- */}
       <div className="rvb-col">
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>
+          <Eyebrow as="h1">
+            Mortgage Payment Comparison Calculator ·{" "}
+            {us ? "United States" : "British Columbia"}
+          </Eyebrow>
+          <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2, marginTop: 8 }}>
             Compare payments
           </h2>
           <p style={{ fontFamily: SANS, fontSize: 11.5, color: C.mute, marginBottom: 12 }}>
@@ -2204,18 +2212,22 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
+        <Eyebrow as="h1">
+          Compare Two Properties · {p.us ? "United States" : "British Columbia"} ·
+          {" "}which home is the better buy
+        </Eyebrow>
         {winner === null ? (
-          <h1 style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15 }}>
+          <p style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15, marginTop: 10 }}>
             Both properties land in the same place.
-          </h1>
+          </p>
         ) : (
-          <h1 style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15 }}>
+          <p style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15, marginTop: 10 }}>
             Property {winner} leaves you{" "}
             <span style={{
               color: C.buy, borderBottom: "2px solid " + C.buySoft, paddingBottom: 1,
             }}>{usd(Math.abs(gap))}</span>{" "}
             better off after {trim(p.horizonYears)} years.
-          </h1>
+          </p>
         )}
         <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 10, maxWidth: 760 }}>
           Each property is measured against the same renting alternative, then
@@ -2529,17 +2541,17 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
-        <Eyebrow>
-          Investment property · {us ? "United States" : "British Columbia"} ·
-          {" "}Buy and rent out
+        <Eyebrow as="h1">
+          Investment Property Calculator · {us ? "United States" : "British Columbia"} ·
+          {" "}buy and rent out
         </Eyebrow>
-        <h1 style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+        <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
           {ahead ? "This property beats" : "This property trails"} the market by{" "}
           <span style={{ color: ahead ? C.buy : C.rent, borderBottom: "3px solid " + (ahead ? C.buy : C.rent) }}>
             {usd(Math.abs(adv))}
           </span>{" "}
           after {trim(p.horizonYears)} years.
-        </h1>
+        </p>
         <p style={{ fontFamily: SANS, fontSize: 13.5, color: C.mute, marginTop: 12, maxWidth: 760, lineHeight: 1.5 }}>
           The alternative is putting the whole {usd(iv.cashToClose)} of cash to
           close into the market at {trim(p.investPct)}% instead, and feeding it
@@ -2985,13 +2997,13 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
-        <Eyebrow>
-          Prepayment · {us ? "United States" : "British Columbia"} · pay down
-          the mortgage, or invest the difference
+        <Eyebrow as="h1">
+          Mortgage Prepayment Calculator · {us ? "United States" : "British Columbia"} ·
+          {" "}pay down the mortgage, or invest the difference
         </Eyebrow>
-        <h1 style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+        <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
           {headline}
-        </h1>
+        </p>
         <p style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 8, maxWidth: 820, lineHeight: 1.5 }}>
           A mortgage prepayment is a guaranteed, tax-free return equal to your
           rate. The market is a higher expected return that is neither
@@ -3496,21 +3508,47 @@ function stateToHash(raw) {
   return s ? "#" + s : "";
 }
 
-// One list, not two: the ids and the labels used to live apart and had to
-// be kept in sync by hand.
-const TABS = [
-  ["buy", "Rent vs. buy"],
-  ["appreciation", "Appreciation calculator"],
-  ["payments", "Payment comparison"],
-  ["prepay", "Prepayment"],
-  ["compare", "Two properties"],
-  ["invest", "Investment property"],
-];
-const TAB_IDS = TABS.map((t) => t[0]);
-function tabFromHash() {
-  if (typeof window === "undefined") return "buy";
+const ROUTES = routesData.routes;
+
+// Tabs, their labels and their URLs all come from routes.json, which
+// build.sh reads too — so the static HTML it emits for each route and the
+// routing here can never disagree about what paths exist.
+const TABS = ROUTES.map((r) => [r.id, r.label]);
+const TAB_IDS = ROUTES.map((r) => r.id);
+const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
+
+// Trailing slash optional, so /prepayment and /prepayment/ are the same tab
+// rather than one of them silently falling back to the rent-vs-buy page.
+const norm = (p) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
+function routeFromPath() {
+  if (typeof window === "undefined") return ROUTES[0];
+  const p = norm(window.location.pathname);
+  return ROUTES.find((r) => norm(r.path) === p) || null;
+}
+function tabFromPath() {
+  const hit = routeFromPath();
+  return hit ? hit.id : "buy";
+}
+// Cloudflare already answered an unknown path with 404.html and a real 404
+// status. This is so the page the visitor actually sees agrees with it,
+// instead of silently rendering the rent-vs-buy tab under a 404.
+function pathIsUnknown() {
+  return routeFromPath() === null && !legacyTabRedirect();
+}
+
+// Tabs used to live in the hash as `tab=<id>`. Those links are out in the
+// world and must keep working, so translate one to its path on arrival and
+// hand the rest of the hash — the actual inputs — straight through.
+function legacyTabRedirect() {
+  if (typeof window === "undefined") return null;
   const m = window.location.hash.match(/(?:^#|&)tab=([a-z]+)/);
-  return m && TAB_IDS.includes(m[1]) ? m[1] : "buy";
+  if (!m || !TAB_IDS.includes(m[1])) return null;
+  const rest = window.location.hash
+    .replace(/^#/, "")
+    .split("&")
+    .filter((s) => s && !/^tab=/.test(s))
+    .join("&");
+  return { id: m[1], path: ROUTE_BY_ID[m[1]].path + (rest ? "#" + rest : "") };
 }
 
 function hashToState() {
@@ -3534,7 +3572,8 @@ export default function RentVsBuy() {
   const [raw, setRaw] = useState(() => ({ ...DEFAULTS, ...hashToState() }));
   // Declared before the URL-mirror effect below: its dependency array reads
   // `tab` inline during render, so a later declaration is a TDZ crash.
-  const [tab, setTab] = useState(tabFromHash);
+  const [tab, setTab] = useState(tabFromPath);
+  const [notFound, setNotFound] = useState(pathIsUnknown);
   const [copied, setCopied] = useState(false);
   // Deliberately not in the URL: an undo offer is a property of this session,
   // not of the scenario being shared.
@@ -3576,30 +3615,57 @@ export default function RentVsBuy() {
     return () => clearTimeout(id);
   }, [undo]);
 
-  // Mirror the inputs — and which tab is open — into the address bar so
-  // any view is a shareable link. The tab code is handled outside KEYS:
-  // hashToState skips codes it does not recognise, so it passes through.
+  // Mirror the inputs into the address bar so any view is a shareable
+  // link. The tab now lives in the path rather than the hash, because a
+  // fragment is invisible to search engines — each tab is a real URL with
+  // its own static HTML file, and this keeps the bar in step with it.
   React.useEffect(() => {
+    // Leave an unknown URL alone — rewriting it to "/" would erase the
+    // evidence that the visitor asked for something that does not exist.
+    if (notFound) return;
     const id = setTimeout(() => {
-      const parts = [];
-      if (tab !== "buy") parts.push("tab=" + tab);
-      const st = stateToHash(raw).replace(/^#/, "");
-      if (st) parts.push(st);
-      const h = parts.length ? "#" + parts.join("&") : "";
-      const next = window.location.pathname + window.location.search + h;
+      const st = stateToHash(raw);
+      const next = ROUTE_BY_ID[tab].path + window.location.search + st;
       window.history.replaceState(null, "", next);
     }, 250);
     return () => clearTimeout(id);
-  }, [raw, tab]);
+  }, [raw, tab, notFound]);
 
-  // Someone pasting a link into the same tab, or using back/forward
+  // Back/forward, and someone pasting a link into the open tab. popstate
+  // covers path moves; hashchange covers input-only edits, which do not
+  // fire popstate.
   React.useEffect(() => {
-    const onHash = () => {
+    const sync = () => {
       setRaw({ ...DEFAULTS, ...hashToState() });
-      setTab(tabFromHash());
+      // An old `#tab=` link followed from inside the site is a same-document
+      // navigation: it fires hashchange and nothing remounts, so the tab has
+      // to be recovered here as well as on first load. Without this the path
+      // still says "/" and the visitor lands on the wrong tab.
+      const legacy = legacyTabRedirect();
+      if (legacy) {
+        setNotFound(false);
+        setTab(legacy.id);
+        window.history.replaceState(null, "", legacy.path);
+        return;
+      }
+      setNotFound(pathIsUnknown());
+      setTab(tabFromPath());
     };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    };
+  }, []);
+
+  // The same rewrite for a cold load on an old link.
+  React.useEffect(() => {
+    const legacy = legacyTabRedirect();
+    if (!legacy) return;
+    setNotFound(false);
+    setTab(legacy.id);
+    window.history.replaceState(null, "", legacy.path);
   }, []);
 
   const copyLink = async () => {
@@ -3847,15 +3913,31 @@ export default function RentVsBuy() {
       <div className="rvb-shell px-5 py-8">
         {/* Tabs */}
         <div className="flex items-center gap-1 mb-5" style={{ borderBottom: "1px solid " + C.line }}>
+          {/* Real anchors with real hrefs, not buttons: this is the only
+              internal linking on the site, so a crawler needs to be able
+              to walk it to reach the other five pages. Clicks are still
+              handled in-app — the href is what search engines and
+              middle-click follow. */}
           {TABS.map(([id, label]) => (
-            <button
+            <a
               key={id}
-              onClick={() => setTab(id)}
+              href={ROUTE_BY_ID[id].path}
+              aria-current={tab === id ? "page" : undefined}
+              onClick={(e) => {
+                // Let the browser handle anything that means "open elsewhere"
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
+                e.preventDefault();
+                if (id === tab && !notFound) return;
+                setNotFound(false);
+                setTab(id);
+                window.history.pushState(null, "", ROUTE_BY_ID[id].path + stateToHash(raw));
+              }}
               style={{
                 fontFamily: SANS,
                 fontSize: 13.5,
                 fontWeight: tab === id ? 600 : 400,
                 color: tab === id ? C.ink : C.mute,
+                textDecoration: "none",
                 background: "transparent",
                 border: "none",
                 borderBottom: "2px solid " + (tab === id ? C.buy : "transparent"),
@@ -3865,7 +3947,7 @@ export default function RentVsBuy() {
               }}
             >
               {label}
-            </button>
+            </a>
           ))}
 
           {/* Which country's rules the whole page runs on */}
@@ -3949,7 +4031,31 @@ export default function RentVsBuy() {
           </div>
         )}
 
-        {tab === "invest" ? (
+        {notFound ? (
+          <Panel>
+            <Eyebrow as="h1">Page not found</Eyebrow>
+            <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+              That page doesn't exist.
+            </p>
+            <p style={{ fontFamily: SANS, fontSize: 13.5, color: C.mute, marginTop: 12, maxWidth: 640, lineHeight: 1.5 }}>
+              Nothing lives at <code style={{ fontFamily: MONO }}>{window.location.pathname}</code>.
+              Pick a calculator from the tabs above, or start with the{" "}
+              <a
+                href="/"
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
+                  e.preventDefault();
+                  setNotFound(false);
+                  setTab("buy");
+                  window.history.pushState(null, "", "/");
+                }}
+                style={{ color: C.buy }}
+              >
+                rent vs. buy calculator
+              </a>.
+            </p>
+          </Panel>
+        ) : tab === "invest" ? (
           <InvestTab raw={raw} set={set} setRaw={setRaw} p={p} iv={iv} />
         ) : tab === "compare" ? (
           <CompareTab
@@ -4016,9 +4122,9 @@ export default function RentVsBuy() {
         {/* HERO — the verdict is the headline */}
         <header className="mb-7">
           <div className="flex items-center justify-between mb-4">
-            <Eyebrow>
-              Rent vs. buy · {US ? "United States" : "British Columbia"} · net
-              worth after costs and taxes
+            <Eyebrow as="h1">
+              Rent vs. Buy Calculator · {US ? "United States" : "British Columbia"} ·
+              {" "}net worth after costs and taxes
             </Eyebrow>
             <div className="flex items-center gap-2">
             <button
@@ -4058,7 +4164,10 @@ export default function RentVsBuy() {
             </button>
             </div>
           </div>
-          <h1
+          {/* The verdict is the loudest thing on the page but it is not the
+              page's heading — it is a computed figure that changes with every
+              keystroke. The <h1> is the breadcrumb line above. */}
+          <p
             style={{
               fontFamily: SERIF,
               fontWeight: 500,
@@ -4088,7 +4197,7 @@ export default function RentVsBuy() {
                 {p.horizonYears === 1 ? "year" : "years"}.
               </>
             )}
-          </h1>
+          </p>
           <p
             style={{
               fontFamily: SANS,
@@ -5179,6 +5288,55 @@ export default function RentVsBuy() {
         </div>
         </>
         )}
+
+        {/* The page's only other links. Without these a crawler that lands
+            on one calculator has no route to the other five, and no way
+            back out to the rest of the site. */}
+        <footer
+          style={{
+            marginTop: 40, paddingTop: 20,
+            borderTop: "1px solid " + C.line,
+            fontFamily: SANS, fontSize: 12, color: C.mute, lineHeight: 1.9,
+          }}
+        >
+          <nav aria-label="All calculators" style={{ marginBottom: 10 }}>
+            <span style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.04em" }}>
+              ALL CALCULATORS ·{" "}
+            </span>
+            {ROUTES.map((rt, i) => (
+              <React.Fragment key={rt.id}>
+                {i > 0 && <span style={{ color: C.line }}> · </span>}
+                <a
+                  href={rt.path}
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
+                    e.preventDefault();
+                    if (rt.id === tab && !notFound) return;
+                    setNotFound(false);
+                    setTab(rt.id);
+                    window.history.pushState(null, "", rt.path + stateToHash(raw));
+                  }}
+                  style={{ color: tab === rt.id ? C.ink : C.buy, textDecoration: "none" }}
+                >
+                  {rt.h1}
+                </a>
+              </React.Fragment>
+            ))}
+          </nav>
+          <div>
+            <a href="https://rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
+              rishabhdoshi.com
+            </a>
+            <span style={{ color: C.line }}> · </span>
+            <a href="https://experiments.rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
+              More experiments
+            </a>
+            <span style={{ color: C.line }}> · </span>
+            <a href="mailto:hello@rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
+              hello@rishabhdoshi.com
+            </a>
+          </div>
+        </footer>
       </div>
     </div>
   );

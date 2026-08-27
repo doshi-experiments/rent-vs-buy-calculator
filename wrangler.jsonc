@@ -6,6 +6,10 @@
   "compatibility_date": "2026-07-27",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    // Every tab is a real file (dist/prepayment/index.html and so on), so
+    // nothing needs an SPA catch-all any more. That catch-all answered
+    // *every* unknown URL with the app under a 200, which search engines
+    // read as a soft 404; this serves dist/404.html with a real 404.
+    "not_found_handling": "404-page"
   }
 }

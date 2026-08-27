@@ -1,9 +1,9 @@
 {
-  "name": "Rent vs Buy — British Columbia",
+  "name": "Rent vs. Buy Calculator — Canada & the United States",
   "short_name": "Rent vs Buy",
-  "description": "Rent versus buy for Canada and the United States, with an investment property model, mortgage helper income, and an appreciation calculator.",
-  "start_url": ".",
-  "scope": ".",
+  "description": "Free rent vs. buy calculator with real mortgage math for Canada and the US — semi-annual compounding, CMHC, closing costs, and taxes on both sides.",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#E7E9E3",
