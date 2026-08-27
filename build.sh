@@ -9,7 +9,8 @@ rm -rf dist
 mkdir -p dist/fonts
 
 # 1. static shell
-cp src/static/index.html src/static/manifest.webmanifest src/static/_headers src/static/icon.svg dist/
+cp src/static/index.html src/static/manifest.webmanifest src/static/_headers src/static/icon.svg \
+   src/static/robots.txt src/static/sitemap.xml dist/
 
 # 2. icons, decoded from the checked-in base64 (keeps the repo free of binaries)
 node -e "

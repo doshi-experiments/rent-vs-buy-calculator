@@ -1,6 +1,6 @@
 {
   "name": "rent-vs-buy",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "description": "Rent vs buy calculator for Canada and the United States, with an investment property model",
   "scripts": {

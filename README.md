@@ -104,6 +104,30 @@ Because only non-default values are written, links made today keep working if th
 
 ---
 
+## SEO and link previews
+
+`src/static/index.html` carries a canonical URL, Open Graph and Twitter Card
+tags, and a `WebApplication` JSON-LD block — all pointing at
+`https://rent-vs-buy.rishabhdoshi.com/`, so update that URL in one place if
+the domain ever changes. `robots.txt` and `sitemap.xml` live beside it in
+`src/static/` and are copied straight into `dist/` by `build.sh`; there's
+only ever the one crawlable URL, since the tabs are hash-routed rather than
+separate pages.
+
+The social-preview image is `og-image.png`, base64-encoded into
+`icons.b64.json` alongside the app icons — the repo's convention for keeping
+binaries out of diffs — and decoded into `dist/` at build time like the rest
+of them. It's a static 1200×630 card, built once by hand from the app's own
+palette and fonts; regenerate it (any screenshot tool at that resolution
+works) if the tab list or tagline changes enough to make it stale.
+
+The app itself is client-rendered — `<div id="root">` is empty until
+`app.js` runs — so the `<noscript>` block in `index.html` is what a crawler
+or JS-disabled visitor actually reads. Keep its description in sync with the
+`<meta name="description">` and Open Graph copy above it if either changes.
+
+---
+
 ## Why HTTPS matters here
 
 Service workers — the thing that makes this work offline and installable — only run in a "secure context." That means HTTPS, or `localhost`.
