@@ -8,6 +8,8 @@
     "serve": "npx --yes serve dist -l 8099"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
+    "@doshi-experiments/design-system": "file:doshi-experiments-design-system-0.1.0.tgz",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "recharts": "2.12.7"

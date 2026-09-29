@@ -1,3 +1,5 @@
+import {Button, HelpPopover, SegmentedControl} from "@doshi-experiments/design-system/react";
+import { resolveTokens } from "./design-system/tokens.js";
 import React, { useState, useMemo } from "react";
 import routesData from "./routes.json";
 import {
@@ -14,8 +16,6 @@ import {
   CartesianGrid,
 } from "recharts";
 
-/* MODEL:START — everything to MODEL:END is pure and DOM-free, so the
-   Node test harness can slice it out and assert against it directly. */
 /* ------------------------------------------------------------------ *
  *  Palette + type
  * ------------------------------------------------------------------ */
@@ -23,44 +23,21 @@ import {
  * render time by every component and by the <style> block below, so
  * swapping its contents and re-rendering repaints the whole app. That
  * beats threading a theme prop through ~2000 lines of JSX, and it keeps
- * literal hex values going to Recharts, which will not resolve CSS
- * variables in its SVG presentation attributes. */
-const LIGHT = {
-  bg: "#E7E9E3",
-  panel: "#FBFBF8",
-  panelAlt: "#F1F2ED",
-  ink: "#15181A",
-  mute: "#6C7370",
-  line: "#D2D6CE",
-  buy: "#0F5C52",
-  buySoft: "#A9C6BF",
-  rent: "#8C2F5E",
-  rentSoft: "#D9AEC1",
-  signal: "#D9A408",
-  rentWash: "#F6E9EE",
-  grid: "#D2D6CE",
-  field: "#FFFFFF",
-  onBuy: "#FFFFFF",
+ * concrete shared token values going to the installed Recharts version. */
+function palette(appearance) {
+  const t = resolveTokens({project: 'calculator', appearance});
+  return {bg:t['surface-page'], panel:t['surface-raised'], panelAlt:t['surface-overlay'],
+    ink:t.text, mute:t['text-secondary'], line:t.border, buy:t['action-primary'],
+    buySoft:t['success-bg'], rent:t['chart-4'], rentSoft:t['error-bg'],
+    signal:t['warning-text'], rentWash:t['error-bg'], grid:t.border,
+    field:t['surface-raised'], onBuy:t['action-text']};
+}
+const LIGHT = palette('light'), DARK = palette('dark');
+const intensity = appearance => {
+  const t = resolveTokens({project:'calculator', appearance});
+  return [t['action-primary'], ...[1,2,3,4,5].map(i => t['ramp-'+i])];
 };
-const DARK = {
-  bg: "#0E1C2B",
-  panel: "#14273A",
-  panelAlt: "#1A2F44",
-  ink: "#E8F0F7",
-  mute: "#93AABF",
-  line: "#2A4258",
-  buy: "#5CC0AE",
-  buySoft: "#2E6A61",
-  rent: "#E68AB4",
-  rentSoft: "#7A3355",
-  signal: "#E8BC3E",
-  rentWash: "#2A1B25",
-  grid: "#24394E",
-  field: "#0A1622",
-  onBuy: "#0E1C2B",
-};
-const LIGHT_TINTS = ["#0F5C52", "#2E7568", "#4C8D80", "#6BA599", "#8ABDB3", "#AED4CC"];
-const DARK_TINTS  = ["#5CC0AE", "#4EAD9C", "#419A8A", "#358878", "#2A7567", "#206356"];
+const LIGHT_TINTS = intensity('light'), DARK_TINTS = intensity('dark');
 
 const C = { ...LIGHT };
 const BUY_TINTS = [...LIGHT_TINTS];
@@ -94,13 +71,15 @@ function writeTheme(t) {
     localStorage.setItem("sheet-theme", t);
   } catch (e) {}
 }
-const SERIF = "'IBM Plex Serif', Georgia, 'Times New Roman', serif";
-const SANS = "'IBM Plex Sans', system-ui, -apple-system, sans-serif";
+const SERIF = resolveTokens()["font-display"];
+const SANS = resolveTokens()["font-body"];
 const MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
 
 /* ------------------------------------------------------------------ *
  *  Formatting
  * ------------------------------------------------------------------ */
+/* MODEL:START — everything to MODEL:END is pure and DOM-free, so the
+   Node test harness can slice it out and assert against it directly. */
 const usd = (n) =>
   (n < 0 ? "-" : "") +
   "$" +
@@ -1278,121 +1257,13 @@ function simulatePrepay(p) {
  * ------------------------------------------------------------------ */
 // Two-or-more mutually exclusive choices. This recipe was duplicated
 // verbatim on the payments and compare tabs before it was extracted.
-function Segmented({ options, value, onChange }) {
-  return (
-    <div className="flex items-center gap-2">
-      {options.map(([v, label]) => {
-        const on = v === value;
-        return (
-          <button
-            key={String(v)}
-            type="button"
-            onClick={() => onChange(v)}
-            style={{
-              fontFamily: SANS, fontSize: 12,
-              fontWeight: on ? 600 : 400,
-              color: on ? C.onBuy : C.mute,
-              background: on ? C.buy : "transparent",
-              border: "1px solid " + (on ? C.buy : C.line),
-              borderRadius: 3, padding: "6px 10px", cursor: "pointer",
-            }}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
+function Segmented({options, value, onChange}) {
+  return <SegmentedControl options={options} value={value} onValueChange={onChange} />;
+}
+function Info({text, label}) {
+  return <HelpPopover title={label || "More information"} label={label ? "What " + label + " means" : "More information"}>{text}</HelpPopover>;
 }
 
-/* A small "what does this mean" affordance. Positioned with `fixed` from a
- * measured rect rather than absolutely inside its parent: the fields sit in a
- * narrow two-column sidebar, and an absolutely-positioned bubble there runs
- * off the right of the screen. Opens on hover for a mouse, on tap or focus
- * for everything else, and closes on Escape or a click elsewhere. */
-function Info({ text, label }) {
-  const [pos, setPos] = useState(null);
-  const ref = React.useRef(null);
-  const W = 260;
-
-  const place = () => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const left = Math.min(Math.max(8, r.left + r.width / 2 - W / 2),
-                          Math.max(8, window.innerWidth - W - 8));
-    // Above by default; below when there is not room for it up there.
-    setPos(r.top < 150
-      ? { left, top: r.bottom + 8 }
-      : { left, bottom: window.innerHeight - r.top + 8 });
-  };
-  const close = () => setPos(null);
-
-  React.useEffect(() => {
-    if (!pos) return;
-    const onKey = (e) => e.key === "Escape" && close();
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("scroll", close, true);
-    };
-  }, [pos]);
-
-  return (
-    <span
-      ref={ref}
-      style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
-      onMouseEnter={place}
-      onMouseLeave={close}
-    >
-      <button
-        type="button"
-        aria-label={label ? "What " + label + " means" : "More information"}
-        aria-expanded={!!pos}
-        // Inside a <label>, a click would otherwise be forwarded to the input.
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); pos ? close() : place(); }}
-        onFocus={place}
-        onBlur={close}
-        style={{
-          display: "grid", placeItems: "center",
-          width: 14, height: 14, flexShrink: 0,
-          borderRadius: "50%", border: "1px solid " + C.line,
-          background: pos ? C.buy : "transparent",
-          color: pos ? C.onBuy : C.mute,
-          fontFamily: SERIF, fontSize: 10, fontStyle: "italic", fontWeight: 600,
-          lineHeight: 1, padding: 0, cursor: "help",
-        }}
-      >
-        i
-      </button>
-      {pos && (
-        <span
-          role="tooltip"
-          style={{
-            position: "fixed", zIndex: 60, width: W,
-            left: pos.left, top: pos.top, bottom: pos.bottom,
-            background: C.field, color: C.ink,
-            border: "1px solid " + C.line, borderRadius: 4,
-            boxShadow: "0 6px 20px rgba(0,0,0,.22)",
-            padding: "9px 11px",
-            fontFamily: SANS, fontSize: 11.5, lineHeight: 1.45,
-            fontWeight: 400, letterSpacing: 0, textTransform: "none",
-            whiteSpace: "normal", textAlign: "left",
-          }}
-        >
-          {text}
-        </span>
-      )}
-    </span>
-  );
-}
-
-// `as` exists so a tab's breadcrumb line can BE the page's <h1> without
-// looking like one. Search engines read the tag; people read the size.
 function Eyebrow({ children, tone, as: Tag = "div" }) {
   return (
     <Tag
@@ -1411,6 +1282,7 @@ function Eyebrow({ children, tone, as: Tag = "div" }) {
 }
 
 function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, readOnly, tip }) {
+  const fieldId = React.useId();
   // Says so when characters were dropped, rather than silently changing the
   // number under the user — a stray letter in a pasted figure would
   // otherwise become a different, plausible-looking value.
@@ -1443,13 +1315,13 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, 
   };
 
   return (
-    <label className="block">
+    <div className="block">
       <span
         className="flex items-baseline justify-between"
         style={{ marginBottom: 4, gap: 6 }}
       >
         <span className="flex items-center" style={{ gap: 5, minWidth: 0 }}>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>{label}</span>
+          <label htmlFor={fieldId} style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>{label}</label>
           {tip && <Info text={tip} label={label} />}
         </span>
         {badge}
@@ -1470,6 +1342,8 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, 
           </span>
         )}
         <input
+          id={fieldId}
+          aria-describedby={(dropped || hint) ? fieldId + "-hint" : undefined}
           type="text"
           inputMode="decimal"
           autoComplete="off"
@@ -1485,7 +1359,6 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, 
             color: readOnly ? C.mute : C.ink,
             background: "transparent",
             border: "none",
-            outline: "none",
             padding: "7px 4px",
             minWidth: 0,
             cursor: readOnly ? "default" : "text",
@@ -1498,7 +1371,7 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, 
         )}
       </span>
       {(dropped || hint) && (
-        <span
+        <span id={fieldId + "-hint"} role="status"
           style={{
             fontFamily: SANS,
             fontSize: 10.5,
@@ -1510,7 +1383,7 @@ function Field({ label, value, onChange, prefix, suffix, step = 1, hint, badge, 
           {dropped ? "Numbers only — other characters were ignored." : hint}
         </span>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -1745,7 +1618,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
             )}
 
             {good && (
-              <button
+              <Button
                 onClick={() => onApply(appr.cagr)}
                 style={{
                   fontFamily: SANS,
@@ -1762,7 +1635,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                 }}
               >
                 Use {pct(appr.cagr)} in the rent vs. buy calculator
-              </button>
+              </Button>
             )}
             <div style={{ fontFamily: SANS, fontSize: 10.5, color: C.mute, marginTop: 8, lineHeight: 1.45 }}>
               Careful with this one. A rate measured over a particular decade is history, not a
@@ -1961,7 +1834,7 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
             ))}
           </Group>
 
-          <button
+          <Button
             type="button"
             onClick={onCopyConditions}
             style={{
@@ -1971,7 +1844,7 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
             }}
           >
             Use my rent-vs-buy conditions
-          </button>
+          </Button>
         </Panel>
       </div>
 
@@ -2357,14 +2230,14 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
             <div className="flex items-center justify-between mb-1">
               <h2 style={{ fontFamily: SERIF, fontSize: 20 }}>Property {id}</h2>
               {id === "A" && (
-                <button type="button" onClick={onLoadA}
+                <Button type="button" onClick={onLoadA}
                   style={{
                     fontFamily: SANS, fontSize: 11, color: C.buy,
                     background: "transparent", border: "1px solid " + C.line,
                     borderRadius: 3, padding: "5px 9px", cursor: "pointer",
                   }}>
                   Load my rent-vs-buy scenario
-                </button>
+                </Button>
               )}
             </div>
             <div className="rvb-fields mt-3">
@@ -3061,7 +2934,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                      onChange={set("ppRenewalRate")} hint="The big unknown" />
             )}
           </div>
-          <button
+          <Button
             type="button"
             onClick={onCopyConditions}
             style={{
@@ -3071,7 +2944,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
             }}
           >
             Use my rent-vs-buy conditions
-          </button>
+          </Button>
         </Panel>
 
         <Panel>
@@ -3912,7 +3785,7 @@ export default function RentVsBuy() {
 
       <div className="rvb-shell px-5 py-8">
         {/* Tabs */}
-        <div className="flex items-center gap-1 mb-5" style={{ borderBottom: "1px solid " + C.line }}>
+        <div className="flex flex-wrap items-center gap-1 mb-5" style={{ borderBottom: "1px solid " + C.line }}>
           {/* Real anchors with real hrefs, not buttons: this is the only
               internal linking on the site, so a crawler needs to be able
               to walk it to reach the other five pages. Clicks are still
@@ -3960,7 +3833,7 @@ export default function RentVsBuy() {
           </div>
 
           {/* the same switch that sits on the two sheets */}
-          <button
+          <Button
             type="button"
             role="switch"
             aria-checked={theme === "light"}
@@ -3988,7 +3861,7 @@ export default function RentVsBuy() {
             >
               {theme === "light" ? "☀" : "☾"}
             </span>
-          </button>
+          </Button>
         </div>
 
         {undo && (
@@ -4005,7 +3878,7 @@ export default function RentVsBuy() {
               was reset to {undo.to === "United States" ? "US" : "Canadian"}{" "}
               defaults; your time period and household carried over.
             </span>
-            <button
+            <Button
               type="button"
               onClick={() => { setRaw(undo.raw); setUndo(null); }}
               style={{
@@ -4015,8 +3888,8 @@ export default function RentVsBuy() {
               }}
             >
               Undo
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               aria-label="Dismiss"
               onClick={() => setUndo(null)}
@@ -4027,7 +3900,7 @@ export default function RentVsBuy() {
               }}
             >
               ✕
-            </button>
+            </Button>
           </div>
         )}
 
@@ -4127,7 +4000,7 @@ export default function RentVsBuy() {
               {" "}net worth after costs and taxes
             </Eyebrow>
             <div className="flex items-center gap-2">
-            <button
+            <Button
               onClick={copyLink}
               style={{
                 fontFamily: MONO,
@@ -4141,8 +4014,8 @@ export default function RentVsBuy() {
               }}
             >
               {copied ? "Link copied" : "Copy link"}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => {
                 // Reset to the region you are in, not back to Canada
                 const us = Boolean(raw.us);
@@ -4161,7 +4034,7 @@ export default function RentVsBuy() {
               }}
             >
               Reset
-            </button>
+            </Button>
             </div>
           </div>
           {/* The verdict is the loudest thing on the page but it is not the
@@ -4397,7 +4270,7 @@ export default function RentVsBuy() {
                           Auto
                         </span>
                       ) : (
-                        <button
+                        <Button
                           type="button"
                           onClick={() => setRaw((st) => ({ ...st, autoBrokerage: true }))}
                           style={{
@@ -4414,7 +4287,7 @@ export default function RentVsBuy() {
                           }}
                         >
                           Reset
-                        </button>
+                        </Button>
                       )
                     }
                   />
@@ -5122,7 +4995,7 @@ export default function RentVsBuy() {
                 <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0 }}>
                   Year-by-year ledger
                 </h2>
-                <button
+                <Button
                   onClick={() => setShowLedger((s) => !s)}
                   style={{
                     fontFamily: MONO,
@@ -5136,7 +5009,7 @@ export default function RentVsBuy() {
                   }}
                 >
                   {showLedger ? "Hide" : "Show"}
-                </button>
+                </Button>
               </div>
 
               {showLedger && (
