@@ -104,7 +104,7 @@ npx esbuild --bundle src/main.jsx --outfile=dist/app.js \
   --define:__APP_VERSION__='"'$VERSION'"' --define:__BUILD_STAMP__='"'$BUILD'"' \
   --log-level=warning
 npx tailwindcss -c tailwind.config.js -i src/tw.css -o dist/tw.out.css --minify 2>/dev/null
-cat src/fonts.css node_modules/@doshi-experiments/design-system/dist/components.css dist/tw.out.css src/design-system/tokens.css src/design-system/legacy.css > dist/app.css
+cat src/fonts.css node_modules/@doshi-experiments/design-system/dist/components.css dist/tw.out.css src/design-system/tokens.css src/design-system/legacy.css src/design.css > dist/app.css
 rm -f dist/tw.out.css
 
 # Retain notices for bundled runtime dependencies.

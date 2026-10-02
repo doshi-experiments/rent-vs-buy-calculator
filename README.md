@@ -364,7 +364,7 @@ The result is most sensitive to home appreciation, and that input is a guess abo
 This is a model, not financial advice.
 
 
-## Shared design system (0.1.0)
+## Shared design system (0.2.0)
 
 This checkout consumes generated assets from `@doshi-experiments/design-system`.
 The `design-system/release.json` file (under `public/` or `src/` where applicable)
@@ -373,3 +373,8 @@ run its `scripts/sync.mjs` against this asset directory to upgrade. Do not edit
 these generated files locally. Keep the `sheet-theme` cookie and pre-paint
 stamp intact. Light/dark appearance and project identity are separate dimensions.
 Hanken Grotesk is served locally with its OFL notice.
+
+The six calculator views use shared numeric fields, Base UI sliders, cards,
+field groups, metrics, data rows, the results table and page header, in addition
+to buttons, radio groups and help popovers. App-specific layout lives in
+`src/design.css`; calculation and parsing code remain unchanged.
