@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-project="calculator" data-density="comfortable">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -42,7 +42,7 @@
   if(!t){ try{ t=localStorage.getItem('sheet-theme'); }catch(e){} }
   if(t!=='light'&&t!=='dark')
     t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
-  var bg=t==='dark'?'#0E1C2B':'#E7E9E3';
+  var bg=t==='dark'?'#131521':'#f6f7fb';
   var r=document.documentElement;
   r.setAttribute('data-theme',t);
   r.style.setProperty('--rvb-bg',bg);
@@ -68,7 +68,8 @@
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<div id="root"></div>
+<a class="ds-skip" href="#root">Skip to content</a>
+<div id="root" tabindex="-1"></div>
 <!-- The app needs JavaScript to run the mortgage math, but a crawler or a
      JS-disabled visitor should still find real words and real links here
      rather than an empty shell. -->

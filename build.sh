@@ -7,6 +7,7 @@ echo "Building $BUILD"
 
 rm -rf dist
 mkdir -p dist/fonts
+cp src/design-system/fonts/* dist/fonts/
 
 # 1. static shell
 cp src/static/manifest.webmanifest src/static/_headers src/static/icon.svg \
@@ -103,8 +104,19 @@ npx esbuild --bundle src/main.jsx --outfile=dist/app.js \
   --define:__APP_VERSION__='"'$VERSION'"' --define:__BUILD_STAMP__='"'$BUILD'"' \
   --log-level=warning
 npx tailwindcss -c tailwind.config.js -i src/tw.css -o dist/tw.out.css --minify 2>/dev/null
-cat src/fonts.css dist/tw.out.css > dist/app.css
+cat src/fonts.css node_modules/@doshi-experiments/design-system/dist/components.css dist/tw.out.css src/design-system/tokens.css src/design-system/legacy.css src/design.css > dist/app.css
 rm -f dist/tw.out.css
+
+# Retain notices for bundled runtime dependencies.
+node --input-type=module -e '
+import {readFileSync, existsSync, writeFileSync} from "node:fs";
+const packages = ["react", "react-dom", "scheduler", "@base-ui/react", "@base-ui/utils", "@floating-ui/react", "@floating-ui/react-dom", "@floating-ui/core", "@floating-ui/dom", "@floating-ui/utils", "tabbable", "use-sync-external-store"];
+const notices = packages.map(name => {
+  const file = ["LICENSE", "LICENSE.md", "LICENSE.txt"].map(f => "node_modules/" + name + "/" + f).find(existsSync);
+  return file ? name + "\n" + readFileSync(file, "utf8") : "";
+}).filter(Boolean).join("\n\n");
+writeFileSync("dist/THIRD-PARTY-NOTICES.txt", notices);
+'
 
 # 5. service worker, stamped so returning visitors pick up the new version
 ROUTE_LIST=$(node -p "JSON.stringify(require('./src/routes.json').routes.map(r=>r.path.replace(/\/+\$/,'')||'/'))")

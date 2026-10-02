@@ -9,6 +9,7 @@ const ROUTES = __ROUTES__;
 const SHELL = ROUTES.concat([
   "/app.js",
   "/app.css",
+  "/fonts/hanken-grotesk.ttf",
   "/manifest.webmanifest",
   "/icon.svg",
   "/favicon.png",

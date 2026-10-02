@@ -362,3 +362,19 @@ $5–8k a year of benefit that does not exist.
 The result is most sensitive to home appreciation, and that input is a guess about the future rather than a fact about the present. The sensitivity strip is there for that reason: at 1% appreciation instead of 3%, the default scenario flips from strongly favouring buying to strongly favouring renting. Treat the headline number as one scenario among several, not a verdict.
 
 This is a model, not financial advice.
+
+
+## Shared design system (0.2.0)
+
+This checkout consumes generated assets from `@doshi-experiments/design-system`.
+The `design-system/release.json` file (under `public/` or `src/` where applicable)
+records their version and hashes. Edit the shared token source, rebuild it, and
+run its `scripts/sync.mjs` against this asset directory to upgrade. Do not edit
+these generated files locally. Keep the `sheet-theme` cookie and pre-paint
+stamp intact. Light/dark appearance and project identity are separate dimensions.
+Hanken Grotesk is served locally with its OFL notice.
+
+The six calculator views use shared numeric fields, Base UI sliders, cards,
+field groups, metrics, data rows, the results table and page header, in addition
+to buttons, radio groups and help popovers. App-specific layout lives in
+`src/design.css`; calculation and parsing code remain unchanged.
