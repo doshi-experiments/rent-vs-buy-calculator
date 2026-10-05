@@ -10,7 +10,7 @@
 <title>{{TITLE}}</title>
 <meta name="description" content="{{DESCRIPTION}}">
 <link rel="canonical" href="{{CANONICAL}}">
-<meta name="theme-color" content="#E7E9E3">
+<meta name="theme-color" content="#F1F5F7">
 <meta name="color-scheme" content="light dark">
 
 <meta property="og:type" content="website">
@@ -32,27 +32,7 @@
 <script type="application/ld+json">
 {{JSONLD}}
 </script>
-<!-- Theme is resolved before first paint, from a cookie scoped to
-     .rishabhdoshi.com so the choice carries over from the portfolio
-     and the experiments index. app.js is deferred, so without this the
-     dark-mode visitor gets a flash of the light shell on every load. -->
-<script>
-(function(){
-  var m=document.cookie.match(/(?:^|;\s*)sheet-theme=(light|dark)/),t=m&&m[1];
-  if(!t){ try{ t=localStorage.getItem('sheet-theme'); }catch(e){} }
-  if(t!=='light'&&t!=='dark')
-    t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
-  var bg=t==='dark'?'#131521':'#f6f7fb';
-  var r=document.documentElement;
-  r.setAttribute('data-theme',t);
-  r.style.setProperty('--rvb-bg',bg);
-  r.style.colorScheme=t;
-  document.addEventListener('DOMContentLoaded',function(){
-    var mt=document.querySelector('meta[name="theme-color"]');
-    if(mt)mt.setAttribute('content',bg);
-  });
-})();
-</script>
+<script src="/design-system/prepaint.js"></script>
 <!-- Root-absolute, not relative: these same tags are served from
      /prepayment/ and the rest, where "app.js" would resolve to
      /prepayment/app.js and 404. -->
@@ -63,8 +43,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Rent vs Buy">
-<link rel="preload" href="/fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/IBMPlexMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/commissioner-variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -74,14 +53,14 @@
      JS-disabled visitor should still find real words and real links here
      rather than an empty shell. -->
 <noscript>
-  <div style="font-family:sans-serif;max-width:640px;margin:60px auto;padding:0 20px;line-height:1.6;color:#15181A">
+  <div style="font-family:var(--ds-font-body);max-width:64ch;margin:60px auto;padding:0 20px;line-height:1.55;color:var(--ds-text)">
     <h1>{{H1}}</h1>
     <p>{{LEAD}}</p>
     <p>This calculator needs JavaScript to run. Please enable it in your
        browser to use it.</p>
     <p><b>All calculators:</b><br>{{NAVLINKS}}</p>
-    <p><a href="https://rishabhdoshi.com">rishabhdoshi.com</a> ·
-       <a href="https://experiments.rishabhdoshi.com">More experiments</a></p>
+    <p><a href="https://rishabhdoshi.com/">Home</a> /
+       <a href="https://experiments.rishabhdoshi.com/">Experiments</a></p>
   </div>
 </noscript>
 <script src="/app.js" defer></script>
