@@ -1,5 +1,6 @@
-import {Button, HelpPopover, SegmentedControl, NumericField, RangeField, Card, FieldGroup, Metric as SharedMetric, DataRow, DataTable, PageHeader} from "@doshi-experiments/design-system/react";
+import {Button, HelpPopover, SegmentedControl, NumericField, RangeField, Card, FieldGroup, Metric as SharedMetric, DataRow, DataTable, PageHeader, SiteHeader, Disclosure} from "@doshi-experiments/design-system/react";
 import { resolveTokens } from "./design-system/tokens.js";
+import {createAppearanceController} from "@doshi-experiments/design-system/theme";
 import React, { useState, useMemo } from "react";
 import routesData from "./routes.json";
 import {
@@ -42,38 +43,15 @@ const LIGHT_TINTS = intensity('light'), DARK_TINTS = intensity('dark');
 const C = { ...LIGHT };
 const BUY_TINTS = [...LIGHT_TINTS];
 
-function readTheme() {
-  const m = document.cookie.match(/(?:^|;\s*)sheet-theme=(light|dark)/);
-  let t = m && m[1];
-  if (!t) { try { t = localStorage.getItem("sheet-theme"); } catch (e) {} }
-  if (t !== "light" && t !== "dark")
-    t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  return t;
-}
-function applyPalette(t) {
-  Object.assign(C, t === "dark" ? DARK : LIGHT);
+const appearanceController = createAppearanceController({root: document.documentElement});
+function applyPalette(appearance) {
+  Object.assign(C, appearance === "dark" ? DARK : LIGHT);
   BUY_TINTS.length = 0;
-  BUY_TINTS.push(...(t === "dark" ? DARK_TINTS : LIGHT_TINTS));
-  const root = document.documentElement;
-  root.setAttribute("data-theme", t);
-  root.style.setProperty("--rvb-bg", C.bg);
-  root.style.colorScheme = t;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", C.bg);
-}
-function writeTheme(t) {
-  /* cookie is scoped to the registrable domain so the choice carries
-   * between rishabhdoshi.com, experiments. and rent-vs-buy. */
-  try {
-    document.cookie = "sheet-theme=" + t + ";domain=.rishabhdoshi.com;path=/;" +
-                      "max-age=31536000;samesite=lax";
-    document.cookie = "sheet-theme=" + t + ";path=/;max-age=31536000;samesite=lax";
-    localStorage.setItem("sheet-theme", t);
-  } catch (e) {}
+  BUY_TINTS.push(...(appearance === "dark" ? DARK_TINTS : LIGHT_TINTS));
 }
 const SERIF = resolveTokens()["font-display"];
 const SANS = resolveTokens()["font-body"];
-const MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace";
+const MONO = SANS;
 
 /* ------------------------------------------------------------------ *
  *  Formatting
@@ -1265,7 +1243,7 @@ function Info({text, label}) {
 }
 
 function Eyebrow({children, tone, as: Tag = "div"}) {
-  return <Tag className="ds-eyebrow" style={tone ? {color:tone} : undefined}>{children}</Tag>;
+  return <Tag className="calc-context" style={tone ? {color:tone} : undefined}>{children}</Tag>;
 }
 
 function Field({label, value, onChange, prefix, suffix, step = 1, hint, badge, readOnly, tip}) {
@@ -1299,11 +1277,10 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
   return (
     <>
       <header className="mb-7">
-        <Eyebrow as="p">Home Appreciation Calculator · compound annual growth rate</Eyebrow>
         <p
           style={{
             fontFamily: SERIF,
-            fontWeight: 500,
+            fontWeight: 700,
             fontSize: "clamp(28px, 5vw, 52px)",
             lineHeight: 1.06,
             letterSpacing: "-0.02em",
@@ -1315,7 +1292,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
           {good ? (
             <>
               That works out to{" "}
-              <span style={{ color: tone, borderBottom: "3px solid " + tone }}>
+              <span style={{ color: C.ink}}>
                 {pct(appr.cagr)}
               </span>{" "}
               a year over {appr.years === Math.round(appr.years) ? appr.years : appr.years.toFixed(1)}{" "}
@@ -1326,8 +1303,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
           )}
         </p>
         <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, maxWidth: 640, marginTop: 12, lineHeight: 1.5 }}>
-          Average annual growth isn't the total change divided by the years — growth compounds
-          on itself. This works out the rate that actually gets you from one value to the other.
+          The annual rate includes compounding.
         </p>
       </header>
 
@@ -1453,7 +1429,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                           <div style={{ background: C.field, border: "1px solid " + C.line, borderRadius: "var(--ds-radius-control)", padding: "8px 10px", fontFamily: MONO, fontSize: 14 }}>
                             <div style={{ color: C.mute, fontSize: 12, marginBottom: 3 }}>
                               {d.label}
-                              {d.projected ? " \u00b7 PROJECTED" : ""}
+                              {d.projected ? " (projected)" : ""}
                             </div>
                             <div>{usd(d.value)}</div>
                           </div>
@@ -1554,10 +1530,6 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
       {/* ---- inputs ---- */}
       <div className="rvb-col">
         <Panel>
-          <Eyebrow as="p">
-            Mortgage Payment Comparison Calculator ·{" "}
-            {us ? "United States" : "British Columbia"}
-          </Eyebrow>
           <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2, marginTop: 8 }}>
             Compare payments
           </h2>
@@ -1861,10 +1833,6 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
-        <Eyebrow as="p">
-          Compare Two Properties · {p.us ? "United States" : "British Columbia"} ·
-          {" "}which home is the better buy
-        </Eyebrow>
         {winner === null ? (
           <p style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15, marginTop: 10 }}>
             Both properties land in the same place.
@@ -1873,16 +1841,13 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
           <p style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15, marginTop: 10 }}>
             Property {winner} leaves you{" "}
             <span style={{
-              color: C.buy, borderBottom: "2px solid " + C.buySoft, paddingBottom: 1,
+              color: C.ink,
             }}>{usd(Math.abs(gap))}</span>{" "}
             better off after {trim(p.horizonYears)} years.
           </p>
         )}
         <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, marginTop: 10, maxWidth: 760 }}>
-          Each property is measured against the same renting alternative, then
-          the two are compared. That keeps the difference in what they cost
-          every month in the answer — it would otherwise disappear, since money
-          not spent on a house is money invested either way.
+          Both properties share the same renting alternative. Monthly savings are invested.
         </p>
 
         <div className="rvb-pair mt-4">
@@ -2175,13 +2140,9 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
-        <Eyebrow as="p">
-          Investment Property Calculator · {us ? "United States" : "British Columbia"} ·
-          {" "}buy and rent out
-        </Eyebrow>
         <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
           {ahead ? "This property beats" : "This property trails"} the market by{" "}
-          <span style={{ color: ahead ? C.buy : C.rent, borderBottom: "3px solid " + (ahead ? C.buy : C.rent) }}>
+          <span style={{ color: C.ink}}>
             {usd(Math.abs(adv))}
           </span>{" "}
           after {trim(p.horizonYears)} years.
@@ -2620,7 +2581,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
     : (
       <>
         Investing instead beats prepaying above{" "}
-        <span style={{ color: C.rent, borderBottom: "3px solid " + C.rent }}>
+        <span style={{ color: C.ink}}>
           {trim(pp.hurdle)}%
         </span>{" "}
         a year.
@@ -2631,19 +2592,11 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
-        <Eyebrow as="p">
-          Mortgage Prepayment Calculator · {us ? "United States" : "British Columbia"} ·
-          {" "}pay down the mortgage, or invest the difference
-        </Eyebrow>
         <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
           {headline}
         </p>
         <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, marginTop: 8, maxWidth: 820, lineHeight: 1.5 }}>
-          A mortgage prepayment is a guaranteed, tax-free return equal to your
-          rate. The market is a higher expected return that is neither
-          guaranteed nor tax-free. The hurdle above is where those two trade
-          off — it barely moves with how hard you prepay, because it is a
-          property of your rate and your tax, not of the extra payment.
+          Prepaying saves interest at your mortgage rate. Investment returns are uncertain and may be taxed; the hurdle rate accounts for that tradeoff.
         </p>
 
         <div className="rvb-metrics mt-4">
@@ -3215,13 +3168,11 @@ export default function RentVsBuy() {
 
   /* Applied during render, before any child reads C. Idempotent, so a
    * double render costs nothing. */
-  const [theme, setTheme] = useState(readTheme);
-  applyPalette(theme);
-  const toggleTheme = () => {
-    const next = theme === "light" ? "dark" : "light";
-    writeTheme(next);
-    setTheme(next);
-  };
+  const [appearance, setAppearance] = useState(() => ({
+    preference: appearanceController.getPreference(), appearance: appearanceController.getAppearance(),
+  }));
+  React.useEffect(() => appearanceController.subscribe(setAppearance), []);
+  applyPalette(appearance.appearance);
 
   /* Switching country resets every figure to that country's defaults: a
    * $1.45M Vancouver price and a 4.24% Canadian rate are not a sane
@@ -3478,7 +3429,6 @@ export default function RentVsBuy() {
           : Math.round(r.breakeven * 12) % 12);
 
   const css = `
-    .rvb input:focus-visible, .rvb button:focus-visible { outline: 2px solid ${C.signal}; outline-offset: 1px; }
     .rvb input[type=number]::-webkit-outer-spin-button,
     .rvb input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .rvb input[type=number] { -moz-appearance: textfield; }
@@ -3545,8 +3495,10 @@ export default function RentVsBuy() {
       <style>{css}</style>
 
       <div className="rvb-shell px-5 py-8">
-        {/* Tabs */}
-        <div className="calc-navigation">
+        <SiteHeader project="calculator" appearance={appearance.preference}
+          onAppearanceChange={(value) => appearanceController.setPreference(value)} />
+        {/* Local calculator navigation stays separate from the wider site. */}
+        <nav className="calc-navigation" aria-label="Calculators">
           {/* Real anchors with real hrefs, not buttons: this is the only
               internal linking on the site, so a crawler needs to be able
               to walk it to reach the other five pages. Clicks are still
@@ -3581,15 +3533,9 @@ export default function RentVsBuy() {
             />
           </div>
 
-          <Button type="button" role="switch" aria-checked={theme === "light"}
-            aria-label={theme === "light" ? "Switch to the dark sheet" : "Switch to the light sheet"}
-            className="calc-appearance" onClick={toggleTheme}>
-            <span aria-hidden="true" className="calc-appearance-dot" />
-            <span>{theme === "light" ? "Light" : "Dark"}</span>
-          </Button>
-        </div>
+        </nav>
 
-        <PageHeader eyebrow="Doshi · Decision tools" title={notFound ? "Page not found" : ROUTE_BY_ID[tab].h1} description={notFound ? "Choose a calculator below to continue." : ROUTE_BY_ID[tab].lead} />
+        <PageHeader title={notFound ? "Page not found" : ROUTE_BY_ID[tab].h1} description={notFound ? "Choose a calculator below to continue." : ROUTE_BY_ID[tab].lead} />
 
         {undo && (
           <div
@@ -3601,9 +3547,7 @@ export default function RentVsBuy() {
             }}
           >
             <span style={{ fontFamily: SANS, fontSize: 14, color: C.ink }}>
-              Switched to <b style={{ fontWeight: 600 }}>{undo.to}</b>. Every tab
-              was reset to {undo.to === "United States" ? "US" : "Canadian"}{" "}
-              defaults; your time period and household carried over.
+              All calculators use <b style={{ fontWeight: 600 }}>{undo.to}</b> defaults. Your time period and household are kept.
             </span>
             <Button
               type="button"
@@ -3722,10 +3666,7 @@ export default function RentVsBuy() {
         {/* HERO — the verdict is the headline */}
         <header className="mb-7">
           <div className="flex items-center justify-between mb-4">
-            <Eyebrow as="p">
-              Rent vs. Buy Calculator · {US ? "United States" : "British Columbia"} ·
-              {" "}net worth after costs and taxes
-            </Eyebrow>
+            <p className="calc-context">Net worth after costs and taxes</p>
             <div className="flex items-center gap-2">
             <Button
               onClick={copyLink}
@@ -3770,7 +3711,7 @@ export default function RentVsBuy() {
           <p
             style={{
               fontFamily: SERIF,
-              fontWeight: 500,
+              fontWeight: 700,
               fontSize: "clamp(28px, 5vw, 52px)",
               lineHeight: 1.06,
               letterSpacing: "-0.02em",
@@ -3780,9 +3721,9 @@ export default function RentVsBuy() {
           >
             {tooClose ? (
               <>
-                Over {p.horizonYears} {p.horizonYears === 1 ? "year" : "years"} it's a
-                coin flip — the two paths finish{" "}
-                <span style={{ color: winColor, borderBottom: "3px solid " + winColor }}>
+                Over {p.horizonYears} {p.horizonYears === 1 ? "year" : "years"} it's
+                close: the two paths finish{" "}
+                <span style={{ color: C.ink}}>
                   {usd(Math.abs(r.advantage))}
                 </span>{" "}
                 apart.
@@ -3790,38 +3731,22 @@ export default function RentVsBuy() {
             ) : (
               <>
                 {winner} leaves you{" "}
-                <span style={{ color: winColor, borderBottom: "3px solid " + winColor }}>
+                <span style={{ color: C.ink}}>
                   {usd(Math.abs(r.advantage))}
                 </span>{" "}
-                richer after {p.horizonYears}{" "}
+                ahead after {p.horizonYears}{" "}
                 {p.horizonYears === 1 ? "year" : "years"}.
               </>
             )}
           </p>
-          <p
-            style={{
-              fontFamily: SANS,
-              fontSize: 14,
-              color: C.mute,
-              maxWidth: 640,
-              marginTop: 12,
-              lineHeight: 1.5,
-            }}
-          >
-            Both people spend the same money each month. Whoever pays less puts the
-            difference into the market at {p.investPct}%, and the renter starts by
-            investing the buyer's whole {usd(r.cashToClose)} of cash to close.
-            {p.suiteRentMo > 0 && (
-              <>
-                {" "}
-                The suite brings in{" "}
-                <strong style={{ color: C.ink, fontWeight: 600 }}>{usd(y1.suite)}</strong> a
-                month after vacancy and tax, straight off the cost of owning.
-              </>
-            )}{" "}
-            Owning pulls ahead{" "}
-            <strong style={{ color: C.ink, fontWeight: 600 }}>{beText}</strong>.
-          </p>
+          <p className="calc-context">{r.breakeven === null
+            ? `Owning doesn't pull ahead within ${p.horizonYears} years.`
+            : `Owning pulls ahead ${r.breakeven > 0 ? "in " : ""}${beText}.`}</p>
+          <Disclosure title="How this comparison works" className="calc-assumptions">
+            <p>Both households spend the same amount each month. The difference is invested at {p.investPct}%.
+              The renter also invests the buyer’s {usd(r.cashToClose)} in closing cash.</p>
+            {p.suiteRentMo > 0 && <p>Rental income reduces the cost of owning by {usd(y1.suite)} a month after vacancy and tax.</p>}
+          </Disclosure>
 
           {/* The two levers that move the answer most */}
           <div
@@ -3986,7 +3911,7 @@ export default function RentVsBuy() {
                           style={{
                             fontFamily: MONO,
                             fontSize: 9,
-                            letterSpacing: "0.03em",
+                            letterSpacing: "normal",
                             color: C.buy,
                             border: "1px solid " + C.buySoft,
                             borderRadius: 2,
@@ -4003,7 +3928,7 @@ export default function RentVsBuy() {
                           style={{
                             fontFamily: MONO,
                             fontSize: 9,
-                            letterSpacing: "0.03em",
+                            letterSpacing: "normal",
                             color: C.mute,
                             background: "transparent",
                             border: "1px solid " + C.line,
@@ -4769,9 +4694,9 @@ export default function RentVsBuy() {
                                 padding: "6px 7px",
                                 borderBottom: "1px solid " + C.ink,
                                 fontSize: 12,
-                                letterSpacing: "0.03em",
+                                letterSpacing: "normal",
                                 color: C.mute,
-                                fontWeight: 500,
+                                fontWeight: 700,
                                 whiteSpace: "nowrap",
                               }}
                             >
@@ -4878,7 +4803,7 @@ export default function RentVsBuy() {
                 fontSize: 12,
                 color: C.mute,
                 marginTop: 8,
-                letterSpacing: "0.06em",
+                letterSpacing: "normal",
               }}
             >
               {"v" +
@@ -4902,12 +4827,10 @@ export default function RentVsBuy() {
           }}
         >
           <nav aria-label="All calculators" style={{ marginBottom: 10 }}>
-            <span style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.04em" }}>
-              ALL CALCULATORS ·{" "}
-            </span>
+
             {ROUTES.map((rt, i) => (
               <React.Fragment key={rt.id}>
-                {i > 0 && <span style={{ color: C.line }}> · </span>}
+                {i > 0 && <span style={{ color: C.line }}> / </span>}
                 <a
                   href={rt.path}
                   onClick={(e) => {
@@ -4920,22 +4843,22 @@ export default function RentVsBuy() {
                   }}
                   style={{ color: tab === rt.id ? C.ink : C.buy, textDecoration: "none" }}
                 >
-                  {rt.h1}
+                  {rt.label}
                 </a>
               </React.Fragment>
             ))}
           </nav>
           <div>
             <a href="https://rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
-              rishabhdoshi.com
+              Home
             </a>
-            <span style={{ color: C.line }}> · </span>
+            <span style={{ color: C.line }}> / </span>
             <a href="https://experiments.rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
-              More experiments
+              Experiments
             </a>
-            <span style={{ color: C.line }}> · </span>
+            <span style={{ color: C.line }}> / </span>
             <a href="mailto:hello@rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
-              hello@rishabhdoshi.com
+              Email
             </a>
           </div>
         </footer>

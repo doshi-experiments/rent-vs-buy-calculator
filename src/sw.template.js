@@ -9,7 +9,8 @@ const ROUTES = __ROUTES__;
 const SHELL = ROUTES.concat([
   "/app.js",
   "/app.css",
-  "/fonts/hanken-grotesk.ttf",
+  "/fonts/commissioner-variable.woff2",
+  "/design-system/prepaint.js",
   "/manifest.webmanifest",
   "/icon.svg",
   "/favicon.png",
@@ -17,15 +18,6 @@ const SHELL = ROUTES.concat([
   "/icon-192.png",
   "/icon-512.png",
   "/icon-maskable-512.png",
-  "/fonts/IBMPlexSans-Regular.woff2",
-  "/fonts/IBMPlexSans-Medium.woff2",
-  "/fonts/IBMPlexSans-SemiBold.woff2",
-  "/fonts/IBMPlexMono-Regular.woff2",
-  "/fonts/IBMPlexMono-Medium.woff2",
-  "/fonts/IBMPlexMono-SemiBold.woff2",
-  "/fonts/IBMPlexSerif-Regular.woff2",
-  "/fonts/IBMPlexSerif-Medium.woff2",
-  "/fonts/IBMPlexSerif-SemiBold.woff2",
 ]);
 
 self.addEventListener("install", (e) => {

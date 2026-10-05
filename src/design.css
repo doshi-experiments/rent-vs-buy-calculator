@@ -1,29 +1,32 @@
-/* Calculator composition built from shared design-system recipes. */
-:root[data-project=calculator] {--ds-radius-container:24px}
-.calc-navigation {display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px; border:1px solid color-mix(in srgb,var(--ds-border) 35%,transparent); border-radius:24px; background:var(--ds-surface-raised); box-shadow:var(--ds-shadow-raised)}
-.calc-nav-link {display:inline-flex; align-items:center; min-height:44px; padding:10px 14px; border-radius:12px; font:600 .875rem/1.3 var(--ds-font-body); color:var(--ds-text-secondary); text-decoration:none; transition:background var(--ds-duration-fast) var(--ds-ease)}
-.calc-nav-link:hover {background:var(--ds-surface-page); color:var(--ds-text)}
+/* Application composition; shared components own their appearance. */
+.rvb-shell > .ds-site-header {padding-inline:0}
+.calc-navigation {display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:18px 0; margin-bottom:8px; border-bottom:1px solid var(--ds-border)}
+.calc-nav-link {display:inline-flex; align-items:center; min-height:44px; padding:10px 12px; border-radius:var(--ds-radius-control); font:600 .875rem/1.3 var(--ds-font-body); color:var(--ds-text-secondary); text-decoration:none}
+.calc-nav-link:hover {background:var(--ds-selection); color:var(--ds-text)}
 .calc-nav-link[aria-current=page] {background:var(--ds-action-primary); color:var(--ds-action-text)}
-.calc-appearance {display:inline-flex; align-items:center; gap:8px; font-size:.875rem; font-weight:600}
-.rvb .ds-card {border-radius:var(--ds-radius-container)}
+.calc-context {font:400 .875rem/1.55 var(--ds-font-body); color:var(--ds-text-secondary); margin:8px 0 12px; max-width:64ch}
+.calc-assumptions {max-width:64ch; margin:16px 0}
+.calc-assumptions p {font-size:.9375rem; line-height:1.55; margin:0 0 12px}
+.rvb p {max-width:64ch}
+.rvb .ds-card {box-shadow:none}
 .rvb .ds-card + .ds-card {margin-top:20px}
-.rvb .ds-card > header {border-bottom:1px solid color-mix(in srgb,var(--ds-border) 30%,transparent); padding-bottom:20px}
-.rvb .ds-card h2 {letter-spacing:-.025em}
+.rvb .ds-card > header {padding-bottom:20px}
+.rvb .ds-card h2 {letter-spacing:-.025em; font-weight:700; font-variation-settings:"FLAR" 15, "VOLM" 0}
 .rvb .ds-card input[type=checkbox] {width:20px; height:20px; accent-color:var(--ds-action-primary); flex-shrink:0}
 .rvb .ds-card label:has(>input[type=checkbox]) {min-height:44px; font-family:var(--ds-font-body)}
-.rvb .ds-card .ds-card {box-shadow:none}
+.rvb .ds-card .ds-card {border:0; border-radius:0; padding:16px 0; background:transparent}
 .rvb .ds-table {font-size:.875rem}
-.rvb .recharts-wrapper {font-family:var(--ds-font-body)}
+.rvb .recharts-wrapper {font-family:var(--ds-font-body); font-variant-numeric:tabular-nums}
 .rvb .recharts-cartesian-axis-tick-value {fill:var(--ds-text-secondary)}
 .rvb .recharts-default-tooltip {border-radius:var(--ds-radius-control)}
+.rvb .ds-metric-value {font-variant-numeric:tabular-nums}
 @media(min-width:1024px) {.rvb .rvb-main {gap:28px; grid-template-columns:380px minmax(0,1fr)}}
 @media(max-width:620px) {
-  .calc-navigation {padding:8px; gap:6px; border-radius:20px}
-  .calc-nav-link {flex:1 1 130px; justify-content:center; text-align:center; font-size:.8125rem}
+  .rvb-shell {padding-left:16px; padding-right:16px}
+  .calc-navigation {gap:4px}
+  .calc-nav-link {flex:1 1 130px; font-size:.8125rem}
   .calc-navigation > div {margin-left:0!important; margin-top:8px}
-  .rvb .ds-page-header {padding:28px 0}
-  .rvb .ds-page-description {font-size:.9375rem}
+  .rvb .ds-page-header {padding:24px 0}
+  .rvb .ds-page-description {font-size:1rem}
   .rvb .rvb-metrics {grid-template-columns:1fr}
 }
-
-.calc-appearance-dot {width:12px; height:12px; border:2px solid currentColor; border-radius:50%; background:var(--ds-action-primary)}
