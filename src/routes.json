@@ -21,7 +21,7 @@
     },
     {
       "id": "appreciation",
-      "label": "Appreciation calculator",
+      "label": "Appreciation",
       "path": "/appreciation/",
       "h1": "Home appreciation",
       "title": "Home Appreciation Calculator \u2014 Annual Growth Rate Between Two Values",

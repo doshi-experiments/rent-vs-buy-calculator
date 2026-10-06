@@ -25,12 +25,18 @@ import {
  * swapping its contents and re-rendering repaints the whole app. That
  * beats threading a theme prop through ~2000 lines of JSX, and it keeps
  * concrete shared token values going to the installed Recharts version. */
+/* Mixes a series color into the card surface. Series tints come from the
+ * series' own hue; the success and error colors stay reserved for status. */
+const tint = (hex, base, k) => "#" + [1, 3, 5].map(i => Math.round(
+  parseInt(hex.slice(i, i + 2), 16) * k + parseInt(base.slice(i, i + 2), 16) * (1 - k)
+).toString(16).padStart(2, "0")).join("");
 function palette(appearance) {
   const t = resolveTokens({project: 'calculator', appearance});
   return {bg:t['surface-page'], panel:t['surface-raised'], panelAlt:t['surface-overlay'],
     ink:t.text, mute:t['text-secondary'], line:t.border, buy:t['action-primary'],
-    buySoft:t['success-bg'], rent:t['chart-4'], rentSoft:t['error-bg'],
-    signal:t['warning-text'], rentWash:t['error-bg'], grid:t.border,
+    buySoft:tint(t['action-primary'], t['surface-raised'], .16), rent:t['chart-4'],
+    rentSoft:tint(t['chart-4'], t['surface-raised'], .16), costSoft:tint(t.text, t['surface-raised'], .16),
+    signal:t['warning-text'], warnBg:t['error-bg'], warnInk:t['error-text'], grid:t.border,
     field:t['surface-raised'], onBuy:t['action-text']};
 }
 const LIGHT = palette('light'), DARK = palette('dark');
@@ -1824,7 +1830,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
     Math.abs(v) < 0.5 ? "—" : (v > 0 ? "+" : "") + fmt(v);
   const cell = (v, tone, strong) => (
     <span style={{
-      fontFamily: MONO, fontSize: 14, textAlign: "right",
+      fontFamily: MONO, fontSize: "var(--cmp-num, 14px)", textAlign: "right",
       color: tone || C.ink, fontWeight: strong ? 600 : 400, whiteSpace: "nowrap",
     }}>{v}</span>
   );
@@ -1888,7 +1894,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
         {(a.shortfall > 0.5 || b.shortfall > 0.5) && (
           <div style={{
             marginTop: 14, padding: "9px 12px", borderRadius: "var(--ds-radius-control)",
-            background: C.rentWash, fontFamily: SANS, fontSize: 13, color: C.rent,
+            background: C.warnBg, fontFamily: SANS, fontSize: 13, color: C.warnInk,
           }}>
             Your cash does not cover the down payment and closing on{" "}
             {a.shortfall > 0.5 && b.shortfall > 0.5 ? "either property"
@@ -1917,7 +1923,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
         {apprDiffers && (
           <div style={{
             marginTop: 14, padding: "9px 12px", borderRadius: "var(--ds-radius-control)",
-            background: C.rentWash, fontFamily: SANS, fontSize: 13, color: C.ink,
+            background: C.warnBg, fontFamily: SANS, fontSize: 13, color: C.ink,
           }}>
             These properties are set to appreciate at different rates
             ({trim(pa.apprPct)}% vs {trim(pb.apprPct)}%). Over{" "}
@@ -2002,33 +2008,39 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
           lives on the first tab.
         </p>
 
-        <div className="rvb-cmp">
-          <span />
-          {cell("Property A", C.mute)}
-          {cell("Property B", C.mute)}
-          {cell("Difference", C.mute)}
-          {rows.map(([label, av, bv, fmt, strong, dashZero]) => {
-            const txt = (v) => (dashZero && Math.abs(v) < 0.5 ? "—" : fmt(v));
-            const box = { padding: "6px 0", borderTop: "1px dotted " + C.line, textAlign: "right" };
-            return (
-              <React.Fragment key={label}>
-                <span style={{
-                  fontFamily: SANS, fontSize: 14, padding: "6px 0",
-                  color: strong ? C.ink : C.mute,
-                  fontWeight: strong ? 600 : 400,
-                  borderTop: "1px dotted " + C.line,
-                }}>{label}</span>
-                <span style={box}>{cell(txt(av), null, strong)}</span>
-                <span style={box}>{cell(txt(bv), null, strong)}</span>
-                <span className="cmp-d" style={box}>
-                  {/* rounded before subtracting, so the column agrees with
-                      the two beside it rather than landing a dollar out */}
-                  {cell(signed(Math.round(av) - Math.round(bv), fmt), C.mute, strong)}
-                </span>
-              </React.Fragment>
-            );
-          })}
-        </div>
+        <table className="rvb-cmp">
+          <thead>
+            <tr>
+              <td />
+              <th scope="col">{cell("Property A", C.mute)}</th>
+              <th scope="col">{cell("Property B", C.mute)}</th>
+              <th scope="col" className="cmp-d">{cell("Difference", C.mute)}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, av, bv, fmt, strong, dashZero]) => {
+              const txt = (v) => (dashZero && Math.abs(v) < 0.5 ? "—" : fmt(v));
+              const box = { paddingTop: 6, paddingBottom: 6, borderTop: "1px dotted " + C.line, textAlign: "right" };
+              return (
+                <tr key={label}>
+                  <th scope="row" style={{
+                    fontFamily: SANS, fontSize: "var(--cmp-label, 14px)", paddingTop: 6, paddingBottom: 6,
+                    color: strong ? C.ink : C.mute,
+                    fontWeight: strong ? 600 : 400,
+                    borderTop: "1px dotted " + C.line,
+                  }}>{label}</th>
+                  <td style={box}>{cell(txt(av), null, strong)}</td>
+                  <td style={box}>{cell(txt(bv), null, strong)}</td>
+                  <td className="cmp-d" style={box}>
+                    {/* rounded before subtracting, so the column agrees with
+                        the two beside it rather than landing a dollar out */}
+                    {cell(signed(Math.round(av) - Math.round(bv), fmt), C.mute, strong)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
 
         <div style={{ borderTop: "1px solid " + C.line, marginTop: 14, paddingTop: 12 }}>
           <Eyebrow>Over {trim(p.horizonYears)} years</Eyebrow>
@@ -2043,20 +2055,20 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
               <>
                 <Row label="Remodelling drawn from investments"
                      value={usd(a.totRemodelFromPort) + "  ·  " + usd(b.totRemodelFromPort)}
-                     tone={C.rent} />
+ />
                 <Row label="Capital gains tax realised doing so"
                      value={usd(a.totRemodelTax) + "  ·  " + usd(b.totRemodelTax)}
-                     tone={C.rent} />
+ />
               </>
             )}
             {(a.totLOCInterest > 0.5 || b.totLOCInterest > 0.5) && (
               <>
                 <Row label="Line of credit interest paid"
                      value={usd(a.totLOCInterest) + "  ·  " + usd(b.totLOCInterest)}
-                     tone={C.rent} />
+ />
                 <Row label="Still owing on the line of credit"
                      value={usd(a.locBalance) + "  ·  " + usd(b.locBalance)}
-                     tone={C.rent} />
+ />
               </>
             )}
             {(a.totRemodel > 0.5 || b.totRemodel > 0.5) && (
@@ -2183,7 +2195,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
 
         {iv.dscr < 1 && (
           <div style={{ marginTop: 14, padding: "9px 12px", borderRadius: "var(--ds-radius-control)",
-                        background: C.rentWash, fontFamily: SANS, fontSize: 13, color: C.rent }}>
+                        background: C.warnBg, fontFamily: SANS, fontSize: 13, color: C.warnInk }}>
             Net operating income does not cover the mortgage
             (it covers {isFinite(iv.dscr) ? iv.dscr.toFixed(2) : "—"}× of it). Most lenders
             will not write this loan as an investment mortgage, and it needs
@@ -2422,7 +2434,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
           {us && iv.suspendedPAL > 0.5 && (
             <Row label="Losses suspended to sale" value={usd(iv.suspendedPAL)} tone={C.signal} />
           )}
-          <Row label="Tax on the sale" value={usd(iv.exitTax)} tone={C.rent} />
+          <Row label="Tax on the sale" value={usd(iv.exitTax)} />
         </div>
         {us && iv.suspendedPAL > 0.5 && (
           <p style={{ fontFamily: SANS, fontSize: 13, color: C.signal, marginTop: 8, maxWidth: 820 }}>
@@ -2491,7 +2503,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
               <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Property</span>
             </span>
             <span className="flex items-center gap-2">
-              <span style={{ width: 14, height: 3, background: C.rent, display: "inline-block" }} />
+              <span style={{ width: 14, height: 3, background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)", display: "inline-block" }} />
               <span style={{ fontFamily: MONO, fontSize: 13, color: C.rent }}>The market</span>
             </span>
           </div>
@@ -2546,7 +2558,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
                 />
               )}
               <Line dataKey="buy" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
-              <Line dataKey="rent" stroke={C.rent} strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line dataKey="rent" stroke={C.rent} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -2822,8 +2834,8 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
       {/* ---- prepayment privilege warning, Canada only ---- */}
       {pp.hasPrivilege && pp.privilege && pp.privilege.breached && (
         <div className="mb-5" style={{
-          background: C.rentWash, border: "1px solid " + C.line, borderRadius: "var(--ds-radius-control)",
-          padding: "12px 16px", fontFamily: SANS, fontSize: 13, color: C.rent, lineHeight: 1.5,
+          background: C.warnBg, border: "1px solid " + C.line, borderRadius: "var(--ds-radius-control)",
+          padding: "12px 16px", fontFamily: SANS, fontSize: 13, color: C.warnInk, lineHeight: 1.5,
         }}>
           In year {pp.privilege.worstYear} your extra payments reach{" "}
           {trim(pp.privilege.worstYearPct)}% of the original principal — over
@@ -2844,7 +2856,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                 <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Prepay</span>
               </span>
               <span className="flex items-center gap-2">
-                <span style={{ width: 14, height: 3, background: C.rent, display: "inline-block" }} />
+                <span style={{ width: 14, height: 3, background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)", display: "inline-block" }} />
                 <span style={{ fontFamily: MONO, fontSize: 13, color: C.rent }}>Invest instead</span>
               </span>
             </div>
@@ -2906,7 +2918,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                   />
                 )}
                 <Line dataKey="prepay" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
-                <Line dataKey="invest" stroke={C.rent} strokeWidth={2} dot={false} isAnimationActive={false} />
+                <Line dataKey="invest" stroke={C.rent} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -3466,10 +3478,17 @@ export default function RentVsBuy() {
     @media (min-width: 1100px) { .rvb-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
     /* Side-by-side comparison; the difference column is the first to go */
-    .rvb-cmp { display: grid; grid-template-columns: 1fr auto auto auto; column-gap: 16px; }
+    .rvb-cmp { width: 100%; border-collapse: collapse; }
+    .rvb-cmp :is(th, td) { padding-left: 16px; vertical-align: baseline; }
+    .rvb-cmp :is(th[scope="row"], thead td) { width: 100%; padding-left: 0; text-align: left; hyphens: auto; }
+    .rvb-cmp thead th { text-align: right; font-weight: inherit; }
     @media (max-width: 760px) {
-      .rvb-cmp { grid-template-columns: 1fr auto auto; }
       .rvb-cmp .cmp-d { display: none; }
+    }
+    /* two money columns and the longest label have to share 242px at 320 */
+    @media (max-width: 400px) {
+      .rvb-cmp { --cmp-num: 12px; --cmp-label: 13px; }
+      .rvb-cmp :is(th, td) { padding-left: 8px; }
     }
 
     /* Tablet: the inputs span the full width, so fit more fields per row */
@@ -3535,6 +3554,7 @@ export default function RentVsBuy() {
 
         </nav>
 
+        <main id="main" tabIndex={-1}>
         <PageHeader title={notFound ? "Page not found" : ROUTE_BY_ID[tab].h1} description={notFound ? "Choose a calculator below to continue." : ROUTE_BY_ID[tab].lead} />
 
         {undo && (
@@ -3835,7 +3855,7 @@ export default function RentVsBuy() {
                     {US ? "Title, escrow, recording and lender fees"
                         : "1% to $200k, 2% to $2M, 3% above"}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600, color: C.rent }}>
+                  <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600, color: C.ink }}>
                     {usd(r.ptt)}
                   </span>
                 </div>
@@ -3985,7 +4005,7 @@ export default function RentVsBuy() {
                   )}
                 </div>
                 {r.overCap && !US && (
-                  <div style={{ background: C.rentWash, borderRadius: "var(--ds-radius-control)", padding: 8, marginTop: 8, fontFamily: SANS, fontSize: 13, color: C.rent, lineHeight: 1.4 }}>
+                  <div style={{ background: C.warnBg, borderRadius: "var(--ds-radius-control)", padding: 8, marginTop: 8, fontFamily: SANS, fontSize: 13, color: C.warnInk, lineHeight: 1.4 }}>
                     Over the limit — FHSA caps at {usd(r.fhsaCap)} and the HBP at {usd(r.hbpCap)}
                     {p.couple ? " for a couple" : " per person"}. Capped in the maths.
                   </div>
@@ -4074,8 +4094,8 @@ export default function RentVsBuy() {
                 </div>
               )}
               {r.belowMin && (
-                <div style={{ background: C.rentWash, borderRadius: "var(--ds-radius-control)", padding: 10, marginTop: -8 }} className="mb-6">
-                  <div style={{ fontFamily: SANS, fontSize: 14, color: C.rent, lineHeight: 1.4 }}>
+                <div style={{ background: C.warnBg, borderRadius: "var(--ds-radius-control)", padding: 10, marginTop: -8 }} className="mb-6">
+                  <div style={{ fontFamily: SANS, fontSize: 14, color: C.warnInk, lineHeight: 1.4 }}>
                     {US
                       ? "Below 3% down, which is the floor on a conventional loan. You need at least " + usd(r.minDown) + "."
                       : r.insurable
@@ -4215,7 +4235,7 @@ export default function RentVsBuy() {
                     <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Owning</span>
                   </span>
                   <span className="flex items-center gap-2">
-                    <span style={{ width: 14, height: 3, background: C.rent, display: "inline-block" }} />
+                    <span style={{ width: 14, height: 3, background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)", display: "inline-block" }} />
                     <span style={{ fontFamily: MONO, fontSize: 13, color: C.rent }}>Renting</span>
                   </span>
                 </div>
@@ -4292,7 +4312,7 @@ export default function RentVsBuy() {
                       />
                     )}
                     <Line dataKey="buyP" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
-                    <Line dataKey="rentP" stroke={C.rent} strokeWidth={2} dot={false} isAnimationActive={false} />
+                    <Line dataKey="rentP" stroke={C.rent} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -4426,25 +4446,24 @@ export default function RentVsBuy() {
 
                 <Row label="Down payment" value={usd(r.down)} />
                 <Row label={US ? "Title, escrow and lender fees" : "Property transfer tax"}
-                     value={usd(r.ptt)} tone={C.rent} />
+                     value={usd(r.ptt)} />
                 <Row label="Legal, inspection, move" value={usd(r.legalFees)} />
                 <Row label="Cash needed at closing" value={usd(r.cashToClose)} strong />
                 {r.saleTax > 0 && (
                   <Row
                     label={"Capital gains tax to raise " + usd(r.taxableUse)}
                     value={usd(r.saleTax)}
-                    tone={C.rent}
                   />
                 )}
                 {r.hbpUse > 0 && (
                   <Row
                     label={p.hbpRepay ? "HBP repayment, from year 3" : "Tax on skipped HBP repayments"}
                     value={usd(p.hbpRepay ? r.hbpMonthly : r.hbpTaxMonthly) + "/mo"}
-                    tone={p.hbpRepay ? C.mute : C.rent}
+                    tone={p.hbpRepay ? C.mute : undefined}
                   />
                 )}
                 {r.premium > 0 && (
-                  <Row label={"CMHC premium, " + r.premiumPct + "% financed"} value={usd(r.premium)} tone={C.rent} />
+                  <Row label={"CMHC premium, " + r.premiumPct + "% financed"} value={usd(r.premium)} />
                 )}
                 {r.totPMI > 0.5 && (
                   <Row
@@ -4452,7 +4471,6 @@ export default function RentVsBuy() {
                       ? "PMI, until it cancels in year " + Math.ceil(r.pmiEndsMonth / 12)
                       : "PMI over " + p.horizonYears + " years"}
                     value={usd(r.totPMI)}
-                    tone={C.rent}
                   />
                 )}
                 {US && (
@@ -4467,7 +4485,6 @@ export default function RentVsBuy() {
                   <Row
                     label="Tax on the gain above the exclusion"
                     value={usd(r.gainTaxEnd)}
-                    tone={C.rent}
                     tip={"Selling your main home shelters the first " +
                          usd(p.couple ? 500000 : 250000) + " of gain from tax, so long as " +
                          "you owned and lived in it for two of the last five years. This is " +
@@ -4481,12 +4498,12 @@ export default function RentVsBuy() {
                     tone={r.renewalPayment > r.payment ? C.rent : C.buy}
                   />
                 )}
-                <Row label="Interest over the full amortization" value={usd(r.fullInterest)} tone={C.rent} />
+                <Row label="Interest over the full amortization" value={usd(r.fullInterest)} />
                 <Row label={"Interest paid by year " + p.horizonYears} value={usd(r.totInterest)} />
                 <Row label={"Principal paid by year " + p.horizonYears} value={usd(r.totPrincipal)} tone={C.buy} />
                 <Row label={"Balance left at year " + p.horizonYears} value={usd(r.balanceEnd)} />
                 {r.totRemodel > 0.5 && (
-                  <Row label={"Remodelling by year " + p.horizonYears} value={usd(r.totRemodel)} tone={C.rent} />
+                  <Row label={"Remodelling by year " + p.horizonYears} value={usd(r.totRemodel)} />
                 )}
                 {p.suiteRentMo > 0 && (
                   <Row label={"Suite income by year " + p.horizonYears} value={usd(r.totSuite)} tone={C.buy} />
@@ -4520,12 +4537,12 @@ export default function RentVsBuy() {
                             <div style={{ background: C.field, border: "1px solid " + C.line, padding: "6px 9px", fontFamily: MONO, fontSize: 13 }}>
                               <div style={{ color: C.mute, fontSize: 12 }}>YEAR {label}</div>
                               <div style={{ color: C.buy }}>Principal {usd(d.principal)}</div>
-                              <div style={{ color: C.rent }}>Interest {usd(d.interest)}</div>
+                              <div style={{ color: C.mute }}>Interest {usd(d.interest)}</div>
                             </div>
                           );
                         }}
                       />
-                      <Bar dataKey="interest" stackId="a" fill={C.rentSoft} isAnimationActive={false} />
+                      <Bar dataKey="interest" stackId="a" fill={C.costSoft} isAnimationActive={false} />
                       <Bar dataKey="principal" stackId="a" fill={C.buy} isAnimationActive={false} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -4815,6 +4832,8 @@ export default function RentVsBuy() {
         </div>
         </>
         )}
+
+        </main>
 
         {/* The page's only other links. Without these a crawler that lands
             on one calculator has no route to the other five, and no way
