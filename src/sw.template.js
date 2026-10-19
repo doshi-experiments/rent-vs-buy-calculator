@@ -9,7 +9,10 @@ const ROUTES = __ROUTES__;
 const SHELL = ROUTES.concat([
   "/app.js",
   "/app.css",
-  "/fonts/commissioner-variable.woff2",
+  "/fonts/host-grotesk-latin.woff2",
+  "/fonts/host-grotesk-latin-ext.woff2",
+  "/felt/fibre-light.svg",
+  "/felt/fibre-dark.svg",
   "/design-system/prepaint.js",
   "/manifest.webmanifest",
   "/icon.svg",

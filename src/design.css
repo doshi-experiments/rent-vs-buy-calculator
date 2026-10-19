@@ -30,3 +30,5 @@
   .rvb .ds-page-description {font-size:1rem}
   .rvb .rvb-metrics {grid-template-columns:1fr}
 }
+/* Footer links wrap on phones; give each row a full tap height so rows never crowd. */
+.rvb footer a {display:inline-flex; align-items:center; min-height:44px}
