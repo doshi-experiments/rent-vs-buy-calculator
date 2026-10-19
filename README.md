@@ -168,15 +168,15 @@ answers describe the whole tool rather than any one tab.
 
 ### The shared theme cookie
 
-`writeTheme()` in `App.jsx` stores the light/dark choice as a `sheet-theme`
-cookie scoped to `.rishabhdoshi.com`, and the inline script in
-`index.template.html` reads it back *before first paint* — without that, a
-dark-mode visitor gets a flash of the light shell on every load, since
-`app.js` is deferred.
+The shared appearance controller from `@doshi-experiments/design-system` stores the
+System / Light / Dark choice as a `sheet-theme` cookie scoped to `.rishabhdoshi.com`,
+and `/design-system/prepaint.js`, loaded synchronously in `index.template.html`,
+applies it *before first paint*. Without that, a dark-mode visitor gets a flash of
+the light shell on every load, since `app.js` is deferred.
 
-`portfolio-landing` and `experiments-landing` use the same cookie name and
-scope, so the choice follows you across the subdomains. **Renaming it here
-un-syncs all three, and nothing fails loudly when it happens.**
+Every public site uses the same cookie name and scope, so the choice follows you
+across the subdomains. **Renaming it un-syncs them all, and nothing fails loudly
+when it happens.**
 `localStorage` is the fallback for contexts where the cookie domain doesn't
 apply, and `prefers-color-scheme` the fallback after that.
 
@@ -208,8 +208,10 @@ Preview on `localhost` specifically — service workers only run in a secure con
 src/App.jsx            the whole app, including the model
 src/routes.json        the tab list: paths, titles, descriptions, FAQ
 src/main.jsx           entry point, registers the service worker
-src/sw.template.js     offline cache; __BUILD__ and __ROUTES__ are stamped in
-src/fonts.css          @font-face rules
+src/sw.template.js     offline cache; __BUILD__ and __ROUTES__ are stamped in. Its list
+                       must match files in dist/: cache.addAll rejects on one 404 and
+                       the new worker never installs
+src/fonts.css          placeholder; Host Grotesk comes from the design-system tokens
 src/tw.css             Tailwind entry
 src/static/index.template.html   rendered once per route by build.sh
 src/static/            manifest, icon.svg, _headers, robots.txt
@@ -217,7 +219,7 @@ src/static/icons.b64.json   PNG icons + og-image, base64-encoded
 build.sh               produces dist/, including one page per route
 ```
 
-**The repo deliberately contains no binary files.** Fonts are copied out of the `@ibm/plex-*` npm packages at build time, and the PNG icons are decoded from `src/static/icons.b64.json`. That keeps diffs readable and lets any tool that only writes text — including Claude — maintain the whole project.
+**The app's own source contains no binary files.** The only binaries are the committed design-system release: its tarball and the Host Grotesk fonts and texture tiles in `src/design-system/`, which `build.sh` copies into `dist/fonts/` and `dist/felt/`. The PNG icons are decoded from `src/static/icons.b64.json`. The `@ibm/plex-*` dev dependencies are no longer used by the build. That keeps diffs readable and lets any tool that only writes text — including Claude — maintain the whole project.
 
 To change the icon, edit `src/static/icon.svg`, then regenerate the PNGs:
 
@@ -364,15 +366,26 @@ The result is most sensitive to home appreciation, and that input is a guess abo
 This is a model, not financial advice.
 
 
-## Shared design system (0.2.0)
+## Shared design system (0.7.0)
 
-This checkout consumes generated assets from `@doshi-experiments/design-system`.
-The `design-system/release.json` file (under `public/` or `src/` where applicable)
-records their version and hashes. Edit the shared token source, rebuild it, and
-run its `scripts/sync.mjs` against this asset directory to upgrade. Do not edit
-these generated files locally. Keep the `sheet-theme` cookie and pre-paint
-stamp intact. Light/dark appearance and project identity are separate dimensions.
-Hanken Grotesk is served locally with its OFL notice.
+The app depends on the committed release tarball
+(`doshi-experiments-design-system-0.7.0.tgz`, also named in the `Dockerfile`) and
+commits a hashed snapshot in `src/design-system/` that CI re-checks. Never edit
+either by hand; upgrade through the design-system repository's central
+`npm run rollout` command. Keep the `sheet-theme` cookie and the prepaint script
+intact.
+
+The calculator wears the shared Felt identity: Host Grotesk, warm grey wool and
+charcoal, a fibre texture (`#root` must not paint a background over it), and the
+signal, a raspberry-to-brick gradient under white text. The current tool tab and the
+apply button use `--ds-action-gradient`. Slider thumbs are the signal with a white
+rim so they read in both appearances.
+
+Charts take colours from `resolveTokens()` in `palette()`. Owning is signal red
+(`chart-2`: `#C8312F` light, `#E89D9C` dark) for lines, bars and swatches, and owning
+*text* uses the link red (`action-link`), which keeps 4.5:1 on every surface. Renting
+is ink (`chart-1`). Footer links have a 44px row so wrapped rows on a 320px phone do
+not crowd.
 
 The six calculator views use shared numeric fields, Base UI sliders, cards,
 field groups, metrics, data rows, the results table and page header, in addition
