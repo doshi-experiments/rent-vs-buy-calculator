@@ -36,7 +36,7 @@ function palette(appearance) {
     // Two series, two roles: owning is coral (chart-2), renting is ink (chart-1). Owning text
     // uses the link coral, which keeps 4.5:1 on every surface; chart-2 is for strokes and fills.
     ink:t.text, mute:t['text-secondary'], line:t.border, buy:t['action-link'], buyLine:t['chart-2'],
-    buyFill:t['action-primary'], buySoft:tint(t['chart-2'], t['surface-raised'], .16), rent:t['chart-1'],
+    buyFill:t['action-gradient'], buySoft:tint(t['chart-2'], t['surface-raised'], .16), rent:t['chart-1'],
     rentSoft:tint(t['chart-1'], t['surface-raised'], .16), costSoft:tint(t.text, t['surface-raised'], .16),
     signal:t['warning-text'], warnBg:t['error-bg'], warnInk:t['error-text'], grid:t.border,
     field:t['surface-raised'], onBuy:t['action-text']};
