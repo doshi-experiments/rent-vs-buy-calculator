@@ -33,9 +33,11 @@ const tint = (hex, base, k) => "#" + [1, 3, 5].map(i => Math.round(
 function palette(appearance) {
   const t = resolveTokens({project: 'calculator', appearance});
   return {bg:t['surface-page'], panel:t['surface-raised'], panelAlt:t['surface-overlay'],
-    ink:t.text, mute:t['text-secondary'], line:t.border, buy:t['action-primary'],
-    buySoft:tint(t['action-primary'], t['surface-raised'], .16), rent:t['chart-4'],
-    rentSoft:tint(t['chart-4'], t['surface-raised'], .16), costSoft:tint(t.text, t['surface-raised'], .16),
+    // Two series, two roles: owning is coral (chart-2), renting is ink (chart-1). Owning text
+    // uses the link coral, which keeps 4.5:1 on every surface; chart-2 is for strokes and fills.
+    ink:t.text, mute:t['text-secondary'], line:t.border, buy:t['action-link'], buyLine:t['chart-2'],
+    buyFill:t['action-primary'], buySoft:tint(t['chart-2'], t['surface-raised'], .16), rent:t['chart-1'],
+    rentSoft:tint(t['chart-1'], t['surface-raised'], .16), costSoft:tint(t.text, t['surface-raised'], .16),
     signal:t['warning-text'], warnBg:t['error-bg'], warnInk:t['error-text'], grid:t.border,
     field:t['surface-raised'], onBuy:t['action-text']};
 }
@@ -1383,7 +1385,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                   fontSize: 14,
                   fontWeight: 600,
                   color: C.onBuy,
-                  background: C.buy,
+                  background: C.buyFill,
                   border: "none",
                   borderRadius: "var(--ds-radius-control)",
                   padding: "9px 14px",
@@ -1450,7 +1452,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                     />
                     <Line
                       dataKey={(d) => (d.projected ? null : d.value)}
-                      stroke={C.buy}
+                      stroke={C.buyLine}
                       strokeWidth={2}
                       dot={false}
                       isAnimationActive={false}
@@ -1458,7 +1460,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                     />
                     <Line
                       dataKey={(d) => (d.projected ? d.value : null)}
-                      stroke={C.buy}
+                      stroke={C.buyLine}
                       strokeWidth={2}
                       strokeDasharray="4 4"
                       dot={false}
@@ -2499,7 +2501,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
           <h2 style={{ fontFamily: SERIF, fontSize: 21 }}>Property against the market</h2>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-2">
-              <span style={{ width: 14, height: 3, background: C.buy, display: "inline-block" }} />
+              <span style={{ width: 14, height: 3, background: C.buyLine, display: "inline-block" }} />
               <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Property</span>
             </span>
             <span className="flex items-center gap-2">
@@ -2557,7 +2559,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
                            fontFamily: MONO, fontSize: 12, fill: C.signal }}
                 />
               )}
-              <Line dataKey="buy" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line dataKey="buy" stroke={C.buyLine} strokeWidth={2} dot={false} isAnimationActive={false} />
               <Line dataKey="rent" stroke={C.rent} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -2852,7 +2854,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
             <h2 style={{ fontFamily: SERIF, fontSize: 21 }}>Net position over time</h2>
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-2">
-                <span style={{ width: 14, height: 3, background: C.buy, display: "inline-block" }} />
+                <span style={{ width: 14, height: 3, background: C.buyLine, display: "inline-block" }} />
                 <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Prepay</span>
               </span>
               <span className="flex items-center gap-2">
@@ -2917,7 +2919,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                              fontFamily: MONO, fontSize: 12, fill: C.mute }}
                   />
                 )}
-                <Line dataKey="prepay" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
+                <Line dataKey="prepay" stroke={C.buyLine} strokeWidth={2} dot={false} isAnimationActive={false} />
                 <Line dataKey="invest" stroke={C.rent} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -3979,7 +3981,7 @@ export default function RentVsBuy() {
                 <div style={{ marginTop: 10 }}>
                   <div className="flex" style={{ height: 12, borderRadius: 2, overflow: "hidden" }}>
                     {[
-                      ["FHSA", r.fhsaUse, C.buy],
+                      ["FHSA", r.fhsaUse, C.buyLine],
                       ["RRSP", r.hbpUse, BUY_TINTS[2]],
                       ["Cash", r.cashUse, BUY_TINTS[5]],
                       ["Brokerage", r.taxableUse, C.signal],
@@ -4231,7 +4233,7 @@ export default function RentVsBuy() {
                 </h2>
                 <div className="flex items-center gap-4">
                   <span className="flex items-center gap-2">
-                    <span style={{ width: 14, height: 3, background: C.buy, display: "inline-block" }} />
+                    <span style={{ width: 14, height: 3, background: C.buyLine, display: "inline-block" }} />
                     <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Owning</span>
                   </span>
                   <span className="flex items-center gap-2">
@@ -4311,7 +4313,7 @@ export default function RentVsBuy() {
                         }}
                       />
                     )}
-                    <Line dataKey="buyP" stroke={C.buy} strokeWidth={2} dot={false} isAnimationActive={false} />
+                    <Line dataKey="buyP" stroke={C.buyLine} strokeWidth={2} dot={false} isAnimationActive={false} />
                     <Line dataKey="rentP" stroke={C.rent} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -4543,7 +4545,7 @@ export default function RentVsBuy() {
                         }}
                       />
                       <Bar dataKey="interest" stackId="a" fill={C.costSoft} isAnimationActive={false} />
-                      <Bar dataKey="principal" stackId="a" fill={C.buy} isAnimationActive={false} />
+                      <Bar dataKey="principal" stackId="a" fill={C.buyLine} isAnimationActive={false} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

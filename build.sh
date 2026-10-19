@@ -6,8 +6,9 @@ BUILD=$(date -u +%Y%m%d%H%M%S)
 echo "Building $BUILD"
 
 rm -rf dist
-mkdir -p dist/fonts dist/design-system
+mkdir -p dist/fonts dist/felt dist/design-system
 cp src/design-system/fonts/* dist/fonts/
+cp src/design-system/felt/* dist/felt/
 cp src/design-system/prepaint.js dist/design-system/prepaint.js
 
 # 1. static shell
