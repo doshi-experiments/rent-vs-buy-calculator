@@ -3,7 +3,7 @@
 .calc-navigation {display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:18px 0; margin-bottom:8px; border-bottom:1px solid var(--ds-border)}
 .calc-nav-link {display:inline-flex; align-items:center; min-height:44px; padding:10px 14px; border-radius:var(--ds-radius-pill); font:600 .875rem/1.3 var(--ds-font-body); color:var(--ds-text-secondary); text-decoration:none}
 .calc-nav-link:hover {background:var(--ds-selection); color:var(--ds-text)}
-.calc-nav-link[aria-current=page] {background:var(--ds-action-primary); color:var(--ds-action-text); box-shadow:var(--ds-shadow-raised)}
+.calc-nav-link[aria-current=page] {background:var(--ds-action-gradient); color:var(--ds-action-text); box-shadow:var(--ds-shadow-raised)}
 .calc-context {font:400 .875rem/1.55 var(--ds-font-body); color:var(--ds-text-secondary); margin:8px 0 12px; max-width:64ch}
 .calc-assumptions {max-width:64ch; margin:16px 0}
 .calc-assumptions p {font-size:.9375rem; line-height:1.55; margin:0 0 12px}

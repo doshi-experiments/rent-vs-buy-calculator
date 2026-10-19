@@ -3,7 +3,7 @@
 # Tailscale Serve or a reverse proxy with TLS if you need that.
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json doshi-experiments-design-system-0.6.0.tgz ./
+COPY package.json package-lock.json doshi-experiments-design-system-0.7.0.tgz ./
 RUN npm ci --no-audit --no-fund
 COPY . .
 RUN chmod +x build.sh && ./build.sh
