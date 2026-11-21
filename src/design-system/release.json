@@ -1,8 +1,8 @@
 {
   "package": "@doshi-experiments/design-system",
-  "version": "0.8.1",
+  "version": "0.9.2",
   "files": {
-    "components.css": "2706a9c4d6e968f24881e1b19f91108df05cddbd3948feabc5e51ae1911669a0",
+    "components.css": "03713b4aea526164c266ba64aa85f753a0e8854e3d46aaf63e33e80005d26558",
     "tokens.css": "c2ac0dc2e7cc75f30d4b73e886c72e5f25e3ddd4e44b98fdd5f5c604d9375a63",
     "tokens.js": "80ddcbfaf47f4483d29ad03146346d8f36c0faf83c7cc9a8933b061500e6f9b6",
     "tokens.json": "69ce52d118505d356bcc8200cea4a1f55da9d667e9d223c3c32498d28bd5482b",
