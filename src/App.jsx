@@ -1947,7 +1947,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
             onChange={(v) => set("cpRemodelLOC")(v)}
           />
         </div>
-        <div className="rvb-fields">
+        <div className="ds-field-grid rvb-fields">
           <Field label="Total available cash" prefix="$" step={25000}
                  value={raw.cpCash} onChange={set("cpCash")}
                  hint={"Down payment, " + (us ? "closing costs" : "transfer tax") +
@@ -1989,7 +1989,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
                 </Button>
               )}
             </div>
-            <div className="rvb-fields mt-3">
+            <div className="ds-field-grid rvb-fields mt-3">
               {CP_FIELDS.map(([k, label, prefix, suffix, step]) => (
                 <Field key={k}
                        label={us ? { "Strata fee": "HOA dues", "Suite rent": "Rental income" }[label] || label : label}
@@ -2262,7 +2262,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
       <div className="rvb-pair mb-5">
         <Panel>
           <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 12 }}>The purchase</h2>
-          <div className="rvb-fields">
+          <div className="ds-field-grid rvb-fields">
             <Field label="Purchase price" prefix="$" step={25000}
                    value={raw.ivPrice} onChange={set("ivPrice")} />
             <Field label="Down payment" suffix="%" step={5}
@@ -2298,7 +2298,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
 
         <Panel>
           <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 12 }}>Running it</h2>
-          <div className="rvb-fields">
+          <div className="ds-field-grid rvb-fields">
             <Field label="Vacancy" suffix="%" step={1}
                    value={raw.ivVacancyPct} onChange={set("ivVacancyPct")}
                    hint="Of the rent, every year"
@@ -2353,7 +2353,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
           answer moves with it.
         </p>
 
-        <div className="rvb-fields">
+        <div className="ds-field-grid rvb-fields">
           <Field label="Investment return" suffix="%/yr" step={0.5}
                  value={raw.investPct} onChange={set("investPct")}
                  tip="What the money would have earned in the market instead. This is the rate the whole comparison turns on: a point either way moves the answer more than almost anything else on the page." />
@@ -2407,7 +2407,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
               "gain it shelters is only half-taxed. It also cannot create or increase a " +
               "rental loss."}
         </p>
-        <div className="rvb-fields">
+        <div className="ds-field-grid rvb-fields">
           <Field label="Building share of value" suffix="%" step={5}
                  value={raw.ivBuildingPct} onChange={set("ivBuildingPct")}
                  hint="Land is never depreciated. 55–70% is usual" />
@@ -2650,7 +2650,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
           <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
             A standalone loan — not tied to the price on the first tab.
           </p>
-          <div className="rvb-fields">
+          <div className="ds-field-grid rvb-fields">
             <Field label="Mortgage amount" prefix="$" step={10000} value={raw.ppLoan} onChange={set("ppLoan")} />
             <Field label="Interest rate" suffix="%" step={0.05} value={raw.ppRate} onChange={set("ppRate")} />
             <Field label="Amortization" suffix="yr" step={1} value={raw.ppAmort} onChange={set("ppAmort")} />
@@ -2685,7 +2685,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
 
           {modeB ? (
             <>
-              <div className="rvb-fields mt-3">
+              <div className="ds-field-grid rvb-fields mt-3">
                 <Field
                   label="Pay it off in" suffix="yr" step={1}
                   value={raw.ppTargetAmort} onChange={set("ppTargetAmort")}
@@ -2709,7 +2709,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
             </>
           ) : (
             <>
-              <div className="rvb-fields mt-3">
+              <div className="ds-field-grid rvb-fields mt-3">
                 <Field label="Extra payment" prefix="$" suffix="/mo" step={25}
                        value={raw.ppExtraMo} onChange={set("ppExtraMo")} />
                 <Field label="Annual lump sum" prefix="$" step={500}
@@ -2754,7 +2754,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
           page. It's shared with the other tabs — change it here and every
           answer that depends on it moves too.
         </p>
-        <div className="rvb-fields">
+        <div className="ds-field-grid rvb-fields">
           <Field label="Expected return" suffix="%/yr" step={0.5}
                  value={raw.investPct} onChange={set("investPct")}
                  tip="What the extra payments would have earned in the market instead." />
@@ -3862,7 +3862,7 @@ export default function RentVsBuy() {
                   </span>
                 </div>
                 {US ? (
-                  <div className="rvb-fields mt-3">
+                  <div className="ds-field-grid rvb-fields mt-3">
                     <Field label="As a share of price" suffix="%" step={0.25}
                            value={raw.usClosingPct} onChange={set("usClosingPct")}
                            hint="0.5–2% is typical, and varies a lot by state" />
@@ -3910,7 +3910,7 @@ export default function RentVsBuy() {
                     {US ? "Married, filing jointly" : "Buying with a partner"}
                   </span>
                 </label>
-                <div className="rvb-fields mt-3">
+                <div className="ds-field-grid rvb-fields mt-3">
                   {!US && (
                     <>
                       <Field label="From a First Home Savings Account" prefix="$" step={1000} value={raw.fhsaUse} onChange={set("fhsaUse")} hint={"Tax-free \u00b7 limit " + usd(r.fhsaCap)}
