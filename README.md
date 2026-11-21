@@ -393,3 +393,7 @@ The six calculator views use shared numeric fields, Base UI sliders, cards,
 field groups, metrics, data rows, the results table and page header, in addition
 to buttons, radio groups and help popovers. App-specific layout lives in
 `src/design.css`; calculation and parsing code remain unchanged.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). The exception: the Host Grotesk font files in `src/design-system/fonts/` are under the SIL Open Font License 1.1 (`host-grotesk-OFL.txt` beside them).
