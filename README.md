@@ -43,11 +43,11 @@ Installs as an app on a phone and a laptop, works with no signal once installed,
 
 ## Deploy it
 
-The repo is connected to Cloudflare Pages. **Push to `main` and it deploys** — usually live in about a minute. Check progress under Workers & Pages → your project → Deployments.
+The repo is connected to Cloudflare and deploys as a **Worker serving static assets**: `wrangler.jsonc` declares `dist/` as the asset directory and serves `dist/404.html` for unknown paths. **Push to `main` and it deploys** — usually live in about a minute. Check progress under Workers & Pages → your project → Deployments.
 
 ### Cloudflare build settings
 
-If you're wiring this up fresh, or something looks wrong:
+If you're wiring it up through Pages instead, or something looks wrong:
 
 | Setting | Value |
 |---|---|
@@ -211,6 +211,8 @@ src/main.jsx           entry point, registers the service worker
 src/sw.template.js     offline cache; __BUILD__ and __ROUTES__ are stamped in. Its list
                        must match files in dist/: cache.addAll rejects on one 404 and
                        the new worker never installs
+src/design.css         app-specific layout over the shared components
+src/design-system/     committed, hashed design-system snapshot (never hand-edit)
 src/fonts.css          placeholder; Host Grotesk comes from the design-system tokens
 src/tw.css             Tailwind entry
 src/static/index.template.html   rendered once per route by build.sh
@@ -366,10 +368,10 @@ The result is most sensitive to home appreciation, and that input is a guess abo
 This is a model, not financial advice.
 
 
-## Shared design system (0.7.0)
+## Shared design system (0.8.1)
 
 The app depends on the committed release tarball
-(`doshi-experiments-design-system-0.7.0.tgz`, also named in the `Dockerfile`) and
+(`doshi-experiments-design-system-0.8.1.tgz`, also named in the `Dockerfile`) and
 commits a hashed snapshot in `src/design-system/` that CI re-checks. Never edit
 either by hand; upgrade through the design-system repository's central
 `npm run rollout` command. Keep the `sheet-theme` cookie and the prepaint script
