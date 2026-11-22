@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Rent vs. buy calculator (Canada and the US) at rent-vs-buy.rishabhdoshi.com: React 18, Recharts and Tailwind, six tools as six real routes, installable and offline. `README.md` is long and authoritative for the model, routing and deploy. Author commits as `doshi-experiments <311927837+doshi-experiments@users.noreply.github.com>`.
+Rent vs. buy calculator (Canada and the US) at rent-vs-buy.rishabhdoshi.com: React 19, Recharts and Tailwind CSS v4, six tools as six real routes, installable and offline. `README.md` is long and authoritative for the model, routing and deploy. Author commits as `doshi-experiments <311927837+doshi-experiments@users.noreply.github.com>`.
 
 ## Never publish PII or sensitive information
 
@@ -34,18 +34,18 @@ sed -n '/MODEL:START/,/MODEL:END/p' src/App.jsx > /tmp/model.js   # append asser
 node /tmp/model.js
 ```
 
-CI builds and re-verifies `src/design-system/release.json`. The design-system repository's `test:calculator` drives all six routes at four widths in both appearances.
+CI runs `npm ci`, which checks the release tarball against the lockfile, and builds. The design-system repository's `test:calculator` drives all six routes at four widths in both appearances.
 
 ## Architecture
 
 - `src/routes.json` is the single source for tabs: `build.sh` renders one page per route and generates `sitemap.xml` from it. Country rules live in the `REGIONS` object in `App.jsx`.
-- Colours come from `resolveTokens()` in `palette()` in `App.jsx`. Owning: `buy` (text, `action-link`), `buyLine` (strokes and swatches, `chart-2`), `buyFill` (the apply button, `action-gradient`). Renting: `rent` (`chart-1`, ink). `src/design.css` holds app layout over the shared components.
-- The app depends on the committed design-system tarball (also named in the `Dockerfile`) and commits a hashed snapshot in `src/design-system/`. Never edit either; upgrade through the design-system repository's central `npm run rollout`.
+- Colours come from `resolveTokens()` in `palette()` in `App.jsx`. Owning: `buy` (text, `action-link`), `buyLine` (strokes and swatches, `chart-2`), `buyFill` (the apply button, `action-gradient`). Renting: `rent` (`chart-1`, ink). `src/design.css` holds the app's grid layouts over the shared components.
+- The app depends on the committed design-system tarball (also named in the `Dockerfile`). Never edit it; upgrade through the design-system repository's central `npm run rollout`. `src/tw.css` is the stylesheet: Tailwind v4, Felt's theme, then `components.css`, `legacy.css` and the app's `design.css` (grid layouts and breakpoints) in the components layer, so utilities win. Markup is styled with Felt's utilities (`text-ink-secondary`, `border-line`, `text-link`, `rounded-control`); Tailwind's default palette and type sizes don't exist. Inline styles are only for values that depend on state, which read `C`.
 
 ## Invariants that are easy to break
 
 - `src/sw.template.js` precaches a fixed list. Every entry must exist in `dist/`: `cache.addAll` rejects on one 404, the new worker never installs, and returning visitors stay on the old version. Update it whenever font or texture files change.
-- `build.sh` must copy `src/design-system/fonts/` and `src/design-system/felt/` into `dist/`.
+- `build.sh` must copy the tarball's `dist/fonts/` and `dist/felt/` into `dist/`: the Tailwind CLI leaves `url(./fonts/…)` as written.
 - `#root` must not paint a background, or it hides the shared felt texture on `body`.
 - Owning text uses `action-link`; the gradient and `chart-2` are for fills and strokes only.
 - Keep the shared `sheet-theme` cookie and `/design-system/prepaint.js` in `<head>` intact.

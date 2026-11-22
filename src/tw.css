@@ -1,6 +1,22 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* The app stylesheet: Tailwind CSS v4 with Felt's theme, then the shared component CSS and
+   the app's layout (design.css) in the components layer, so utilities override both.
+   The Tailwind CLI keeps the package's url()s as written; build.sh copies fonts/ and
+   felt/ beside dist/app.css to match. */
+@import "tailwindcss" source(none);
+@source "./App.jsx";
+@import "@doshi-experiments/design-system/tailwind.css";
+@import "@doshi-experiments/design-system/components.css" layer(components);
+@import "../node_modules/@doshi-experiments/design-system/dist/legacy.css" layer(components);
+@import "./design.css" layer(components);
+
 html,body,#root{margin:0;padding:0;min-height:100%}
 /* Colour only, so the shared felt texture on body keeps its background-image. */
 html,body{background-color:var(--ds-surface-page,#E7E4DE)}
+
+/* Where Tailwind v4's preflight differs from v3's in ways this app shows: v4 zeroes padding
+   everywhere (v3 left table cells at the browser's 1px, which the comparison tables are
+   measured against) and makes inputs transparent (v3 left an unchecked box white). */
+@layer base {
+  td, th {padding: 1px}
+  input:where([type=checkbox]) {background-color: Field}
+}

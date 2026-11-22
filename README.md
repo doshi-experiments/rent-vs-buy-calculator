@@ -211,17 +211,16 @@ src/main.jsx           entry point, registers the service worker
 src/sw.template.js     offline cache; __BUILD__ and __ROUTES__ are stamped in. Its list
                        must match files in dist/: cache.addAll rejects on one 404 and
                        the new worker never installs
-src/design.css         app-specific layout over the shared components
-src/design-system/     committed, hashed design-system snapshot (never hand-edit)
+src/design.css         the app's grid layouts and breakpoints, in the components layer
 src/fonts.css          placeholder; Host Grotesk comes from the design-system tokens
-src/tw.css             Tailwind entry
+src/tw.css             the app stylesheet: Tailwind v4, Felt's theme, shared and app CSS
 src/static/index.template.html   rendered once per route by build.sh
 src/static/            manifest, icon.svg, _headers, robots.txt
 src/static/icons.b64.json   PNG icons + og-image, base64-encoded
 build.sh               produces dist/, including one page per route
 ```
 
-**The app's own source contains no binary files.** The only binaries are the committed design-system release: its tarball and the Host Grotesk fonts and texture tiles in `src/design-system/`, which `build.sh` copies into `dist/fonts/` and `dist/felt/`. The PNG icons are decoded from `src/static/icons.b64.json`. The `@ibm/plex-*` dev dependencies are no longer used by the build. That keeps diffs readable and lets any tool that only writes text — including Claude — maintain the whole project.
+**The app's own source contains no binary files.** The only binary is the committed design-system release tarball; `build.sh` copies its Host Grotesk fonts and texture tiles from `node_modules` into `dist/fonts/` and `dist/felt/`. The PNG icons are decoded from `src/static/icons.b64.json`. The `@ibm/plex-*` dev dependencies are no longer used by the build. That keeps diffs readable and lets any tool that only writes text — including Claude — maintain the whole project.
 
 To change the icon, edit `src/static/icon.svg`, then regenerate the PNGs:
 
@@ -368,19 +367,31 @@ The result is most sensitive to home appreciation, and that input is a guess abo
 This is a model, not financial advice.
 
 
-## Shared design system (0.8.1)
+## Shared design system (0.10.1)
 
 The app depends on the committed release tarball
-(`doshi-experiments-design-system-0.8.1.tgz`, also named in the `Dockerfile`) and
-commits a hashed snapshot in `src/design-system/` that CI re-checks. Never edit
-either by hand; upgrade through the design-system repository's central
-`npm run rollout` command. Keep the `sheet-theme` cookie and the prepaint script
+(`doshi-experiments-design-system-0.10.1.tgz`, also named in the `Dockerfile`); `npm ci`
+checks it against the lockfile's integrity hash. Never edit it by hand; upgrade through
+the design-system repository's central `npm run rollout` command.
+
+Styles are built with Tailwind CSS v4 (`@tailwindcss/cli`). `src/tw.css` imports
+Tailwind, Felt's theme (`@doshi-experiments/design-system/tailwind.css`), the shared
+`components.css`, `legacy.css` and the app's `design.css` (its grids and breakpoints) in
+the components layer, so utilities override them. Markup is styled with utilities; inline
+styles remain only where a value depends on state. Felt's utilities read the same `--ds-*` tokens as the
+charts' `palette()`: `bg-raised`, `text-ink-secondary`, `border-line`, `action-link`,
+`signal`. There is no `text-signal`; owning text stays `action-link`. The CLI keeps the
+package's `url()`s as written, so `build.sh` copies `fonts/` and `felt/` beside
+`dist/app.css`. A small base block keeps the two places where Tailwind v4's preflight
+differs visibly from v3's: table cells keep the browser's 1px padding, and unchecked
+checkboxes stay filled. Keep the `sheet-theme` cookie and the prepaint script
 intact.
 
 The calculator wears the shared Felt identity: Host Grotesk, warm grey wool and
 charcoal, a fibre texture (`#root` must not paint a background over it), and the
-signal, a raspberry-to-brick gradient under white text. The current tool tab and the
-apply button use `--ds-action-gradient`. Slider thumbs are the signal with a white
+signal, a raspberry-to-brick gradient under white text. The tools are underline tabs:
+the current one is ink over an `action-link` bar on a stitched rule. The apply button
+uses `--ds-action-gradient`. Slider thumbs are the signal with a white
 rim so they read in both appearances.
 
 Charts take colours from `resolveTokens()` in `palette()`. Owning is signal red
@@ -396,4 +407,4 @@ to buttons, radio groups and help popovers. App-specific layout lives in
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). The exception: the Host Grotesk font files in `src/design-system/fonts/` are under the SIL Open Font License 1.1 (`host-grotesk-OFL.txt` beside them).
+MIT, see [LICENSE](LICENSE). The exception: the Host Grotesk font files in the design-system tarball (copied to `dist/fonts/`) are under the SIL Open Font License 1.1 (`host-grotesk-OFL.txt` beside them).

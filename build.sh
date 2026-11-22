@@ -6,10 +6,13 @@ BUILD=$(date -u +%Y%m%d%H%M%S)
 echo "Building $BUILD"
 
 rm -rf dist
+# Fonts, fibre tiles and prepaint come from the installed release tarball. dist/app.css
+# asks for ./fonts/ and ./felt/ beside itself, and every page loads prepaint first.
+DS=node_modules/@doshi-experiments/design-system/dist
 mkdir -p dist/fonts dist/felt dist/design-system
-cp src/design-system/fonts/* dist/fonts/
-cp src/design-system/felt/* dist/felt/
-cp src/design-system/prepaint.js dist/design-system/prepaint.js
+cp $DS/fonts/* dist/fonts/
+cp $DS/felt/* dist/felt/
+cp $DS/prepaint.js dist/design-system/prepaint.js
 
 # 1. static shell
 cp src/static/manifest.webmanifest src/static/_headers src/static/icon.svg \
@@ -96,9 +99,7 @@ npx esbuild --bundle src/main.jsx --outfile=dist/app.js \
   --jsx=automatic --minify --define:process.env.NODE_ENV='"production"' \
   --define:__APP_VERSION__='"'$VERSION'"' --define:__BUILD_STAMP__='"'$BUILD'"' \
   --log-level=warning
-npx tailwindcss -c tailwind.config.js -i src/tw.css -o dist/tw.out.css --minify 2>/dev/null
-cat dist/tw.out.css src/design-system/tokens.css node_modules/@doshi-experiments/design-system/dist/components.css src/design-system/legacy.css src/design.css > dist/app.css
-rm -f dist/tw.out.css
+npx @tailwindcss/cli -i src/tw.css -o dist/app.css --minify --silent
 
 # Retain notices for bundled runtime dependencies.
 node --input-type=module -e '
