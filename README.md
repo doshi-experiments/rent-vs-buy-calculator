@@ -220,7 +220,7 @@ src/static/icons.b64.json   PNG icons + og-image, base64-encoded
 build.sh               produces dist/, including one page per route
 ```
 
-**The app's own source contains no binary files.** The only binary is the committed design-system release tarball; `build.sh` copies its Host Grotesk fonts and texture tiles from `node_modules` into `dist/fonts/` and `dist/felt/`. The PNG icons are decoded from `src/static/icons.b64.json`. The `@ibm/plex-*` dev dependencies are no longer used by the build. That keeps diffs readable and lets any tool that only writes text — including Claude — maintain the whole project.
+**The app's own source contains no binary files.** The only binary is the committed design-system release tarball; `build.sh` copies its Host Grotesk fonts and texture tiles from `node_modules` into `dist/fonts/` and `dist/felt/`. The PNG icons are decoded from `src/static/icons.b64.json`. That keeps diffs readable and lets any tool that only writes text — including Claude — maintain the whole project.
 
 To change the icon, edit `src/static/icon.svg`, then regenerate the PNGs:
 

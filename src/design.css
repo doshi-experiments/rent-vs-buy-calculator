@@ -76,11 +76,9 @@
 .rvb .ds-card label:has(>input[type=checkbox]) {min-height:44px; font-family:var(--ds-font-body)}
 .rvb .ds-card .ds-card {border:0; border-radius:0; padding:16px 0; background:transparent; box-shadow:none}
 .rvb .ds-card .ds-card::after {content:none}
-.rvb .ds-table {font-size:.875rem}
 .rvb .recharts-wrapper {font-family:var(--ds-font-body); font-variant-numeric:tabular-nums}
 .rvb .recharts-cartesian-axis-tick-value {fill:var(--ds-text-secondary)}
 .rvb .recharts-default-tooltip {border-radius:var(--ds-radius-control)}
-.rvb .ds-metric-value {font-variant-numeric:tabular-nums}
 @media(min-width:1024px) {.rvb .rvb-main {gap:28px; grid-template-columns:380px minmax(0,1fr)}}
 @media(max-width:620px) {
   .rvb .ds-page-header {padding:24px 0}
