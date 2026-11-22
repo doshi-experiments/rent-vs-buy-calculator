@@ -1,5 +1,5 @@
 import {Button, HelpPopover, SegmentedControl, NumericField, RangeField, Card, FieldGroup, Metric as SharedMetric, DataRow, DataTable, PageHeader, SiteHeader, Disclosure} from "@doshi-experiments/design-system/react";
-import { resolveTokens } from "./design-system/tokens.js";
+import { resolveTokens } from "@doshi-experiments/design-system";
 import {createAppearanceController} from "@doshi-experiments/design-system/theme";
 import React, { useState, useMemo } from "react";
 import routesData from "./routes.json";
