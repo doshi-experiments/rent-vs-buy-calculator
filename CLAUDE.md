@@ -39,8 +39,8 @@ CI runs `npm ci`, which checks the release tarball against the lockfile, and bui
 ## Architecture
 
 - `src/routes.json` is the single source for tabs: `build.sh` renders one page per route and generates `sitemap.xml` from it. Country rules live in the `REGIONS` object in `App.jsx`.
-- Colours come from `resolveTokens()` in `palette()` in `App.jsx`. Owning: `buy` (text, `action-link`), `buyLine` (strokes and swatches, `chart-2`), `buyFill` (the apply button, `action-gradient`). Renting: `rent` (`chart-1`, ink). `src/design.css` holds app layout over the shared components.
-- The app depends on the committed design-system tarball (also named in the `Dockerfile`). Never edit it; upgrade through the design-system repository's central `npm run rollout`. `src/tw.css` is the stylesheet: Tailwind v4, Felt's theme, then `components.css` and `legacy.css` in the components layer and `design.css` unlayered. Use Felt's utilities (`text-ink-secondary`, `border-line`, `action-link`); Tailwind's default palette and sizes don't exist.
+- Colours come from `resolveTokens()` in `palette()` in `App.jsx`. Owning: `buy` (text, `action-link`), `buyLine` (strokes and swatches, `chart-2`), `buyFill` (the apply button, `action-gradient`). Renting: `rent` (`chart-1`, ink). `src/design.css` holds the app's grid layouts over the shared components.
+- The app depends on the committed design-system tarball (also named in the `Dockerfile`). Never edit it; upgrade through the design-system repository's central `npm run rollout`. `src/tw.css` is the stylesheet: Tailwind v4, Felt's theme, then `components.css`, `legacy.css` and the app's `design.css` (grid layouts and breakpoints) in the components layer, so utilities win. Markup is styled with Felt's utilities (`text-ink-secondary`, `border-line`, `text-link`, `rounded-control`); Tailwind's default palette and type sizes don't exist. Inline styles are only for values that depend on state, which read `C`.
 
 ## Invariants that are easy to break
 

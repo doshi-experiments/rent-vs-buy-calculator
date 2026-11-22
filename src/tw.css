@@ -1,6 +1,5 @@
-/* The app stylesheet: Tailwind CSS v4 with Felt's theme, then the shared component CSS in
-   the components layer, so a utility can override it, then the app's design.css unlayered,
-   because its rules still override utilities until they become utilities themselves.
+/* The app stylesheet: Tailwind CSS v4 with Felt's theme, then the shared component CSS and
+   the app's layout (design.css) in the components layer, so utilities override both.
    The Tailwind CLI keeps the package's url()s as written; build.sh copies fonts/ and
    felt/ beside dist/app.css to match. */
 @import "tailwindcss" source(none);
@@ -8,7 +7,7 @@
 @import "@doshi-experiments/design-system/tailwind.css";
 @import "@doshi-experiments/design-system/components.css" layer(components);
 @import "../node_modules/@doshi-experiments/design-system/dist/legacy.css" layer(components);
-@import "./design.css";
+@import "./design.css" layer(components);
 
 html,body,#root{margin:0;padding:0;min-height:100%}
 /* Colour only, so the shared felt texture on body keeps its background-image. */

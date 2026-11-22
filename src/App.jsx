@@ -21,11 +21,11 @@ import {
 /* ------------------------------------------------------------------ *
  *  Palette + type
  * ------------------------------------------------------------------ */
-/* Two sheets, one drawing. `C` is deliberately mutable: it is read at
- * render time by every component and by the <style> block below, so
- * swapping its contents and re-rendering repaints the whole app. That
- * beats threading a theme prop through ~2000 lines of JSX, and it keeps
- * concrete shared token values going to the installed Recharts version. */
+/* Two sheets, one drawing. Markup is coloured by Felt's utilities (text-ink-secondary,
+ * border-line, text-link), which follow data-theme by themselves. `C` holds the same
+ * tokens as concrete values for what CSS can't reach: Recharts props, computed tints and
+ * the few styles that depend on state. It is deliberately mutable: swapping its contents
+ * and re-rendering repaints those too, without threading a theme prop through the JSX. */
 /* Mixes a series color into the card surface. Series tints come from the
  * series' own hue; the success and error colors stay reserved for status. */
 const tint = (hex, base, k) => "#" + [1, 3, 5].map(i => Math.round(
@@ -1286,22 +1286,12 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
   return (
     <>
       <header className="mb-7">
-        <p
-          style={{
-            fontFamily: SERIF,
-            fontWeight: 700,
-            fontSize: "clamp(28px, 5vw, 52px)",
-            lineHeight: 1.06,
-            letterSpacing: "-0.02em",
-            margin: 0,
-            marginTop: 10,
-            maxWidth: 1020,
-          }}
+        <p className="font-sans font-bold text-[clamp(28px,5vw,52px)] leading-[1.06] tracking-[-0.02em] m-0 mt-2.5 max-w-[1020px]"
         >
           {good ? (
             <>
               That works out to{" "}
-              <span style={{ color: C.ink}}>
+              <span className="text-ink">
                 {pct(appr.cagr)}
               </span>{" "}
               a year over {appr.years === Math.round(appr.years) ? appr.years : appr.years.toFixed(1)}{" "}
@@ -1311,7 +1301,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
             <>Enter two values and a period.</>
           )}
         </p>
-        <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, maxWidth: 640, marginTop: 12, lineHeight: 1.5 }}>
+        <p className="font-sans text-[14px] text-ink-secondary max-w-[640px] mt-3 leading-[1.5]">
           The annual rate includes compounding.
         </p>
       </header>
@@ -1319,10 +1309,10 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
       <div className="rvb-main">
         <div className="rvb-col">
           <Panel>
-            <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+            <h2 className="font-sans text-[19px] font-semibold m-0 mb-0.5">
               Two points in time
             </h2>
-            <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14 }}>
+            <p className="font-sans text-[13px] text-ink-secondary mb-3.5">
               Works for a home, an index, or anything else that compounds.
             </p>
 
@@ -1340,15 +1330,14 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
               )}
             </Group>
 
-            <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }}>
+            <div className="border-t border-line pt-3.5">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
+                <input className="accent-link w-3.5 h-3.5"
                   type="checkbox"
                   checked={raw.apprUseSpan}
                   onChange={(e) => set("apprUseSpan")(e.target.checked)}
-                  style={{ accentColor: C.buy, width: 14, height: 14 }}
                 />
-                <span style={{ fontFamily: SANS, fontSize: 14 }}>
+                <span className="font-sans text-[14px]">
                   Use a time span instead of years
                 </span>
               </label>
@@ -1363,7 +1352,7 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
 
         <div className="rvb-col">
           <Panel className="mb-5">
-            <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 12 }}>
+            <h2 className="font-sans text-[19px] font-semibold m-0 mb-3">
               The numbers
             </h2>
             <Row label="Average annual growth" value={good ? pct(appr.cagr) : "\u2014"} tone={tone} strong />
@@ -1379,26 +1368,13 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
             )}
 
             {good && (
-              <Button
+              <Button className="font-sans text-[14px] font-semibold text-[var(--ds-action-text)] bg-transparent bg-[image:var(--ds-action-gradient)] border-0 rounded-control py-2.25 px-3.5 mt-3.5 cursor-pointer w-full"
                 onClick={() => onApply(appr.cagr)}
-                style={{
-                  fontFamily: SANS,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: C.onBuy,
-                  background: C.buyFill,
-                  border: "none",
-                  borderRadius: "var(--ds-radius-control)",
-                  padding: "9px 14px",
-                  marginTop: 14,
-                  cursor: "pointer",
-                  width: "100%",
-                }}
               >
                 Use {pct(appr.cagr)} in the rent vs. buy calculator
               </Button>
             )}
-            <div style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 8, lineHeight: 1.45 }}>
+            <div className="font-sans text-[12px] text-ink-secondary mt-2 leading-[1.45]">
               Careful with this one. A rate measured over a particular decade is history, not a
               forecast — pick a start year at the top of a boom and you'll flatter the future.
             </div>
@@ -1406,14 +1382,14 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
 
           {good && appr.curve.length > 1 && (
             <Panel>
-              <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+              <h2 className="font-sans text-[19px] font-semibold m-0 mb-0.5">
                 The same rate, projected on
               </h2>
-              <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 10 }}>
+              <p className="font-sans text-[13px] text-ink-secondary mb-2.5">
                 Solid is what happened. Dashed is the next ten years at the same rate — an
                 illustration, not a prediction.
               </p>
-              <div style={{ width: "100%", height: 260 }}>
+              <div className="w-full h-65">
                 <ResponsiveContainer>
                   <ComposedChart data={appr.curve} margin={{ top: 6, right: 10, bottom: 4, left: 0 }}>
                     <CartesianGrid stroke={C.line} vertical={false} />
@@ -1435,8 +1411,8 @@ function AppreciationTab({ raw, set, p, appr, onApply }) {
                         if (!active || !payload || !payload.length) return null;
                         const d = payload[0].payload;
                         return (
-                          <div style={{ background: C.field, border: "1px solid " + C.line, borderRadius: "var(--ds-radius-control)", padding: "8px 10px", fontFamily: MONO, fontSize: 14 }}>
-                            <div style={{ color: C.mute, fontSize: 12, marginBottom: 3 }}>
+                          <div className="bg-raised border border-line rounded-control py-2 px-2.5 font-sans text-[14px]">
+                            <div className="text-ink-secondary text-[12px] mb-0.75">
                               {d.label}
                               {d.projected ? " (projected)" : ""}
                             </div>
@@ -1539,14 +1515,14 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
       {/* ---- inputs ---- */}
       <div className="rvb-col">
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2, marginTop: 8 }}>
+          <h2 className="font-sans text-[21px] mb-0.5 mt-2">
             Compare payments
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
+          <p className="font-sans text-[13px] text-ink-secondary mb-3">
             Up to five amounts, one set of conditions. Leave a row blank to drop it.
           </p>
 
-          <div style={{ marginBottom: 4 }}>
+          <div className="mb-1">
             <Segmented
               options={[[false, "Purchase prices"], [true, "Mortgage amounts"]]}
               value={!priceMode}
@@ -1573,11 +1549,11 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
           </Group>
 
           {priceMode && (
-            <label className="flex items-center gap-2 cursor-pointer"
-                   style={{ marginTop: -8, marginBottom: 14 }}>
+            <label className="flex items-center gap-2 cursor-pointer -mt-2 mb-3.5"
+                  >
               <input type="checkbox" checked={!!raw.cmpFirstTime}
                      onChange={(e) => set("cmpFirstTime")(e.target.checked)} />
-              <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>
+              <span className="font-sans text-[14px] text-ink-secondary">
                 {us ? "First-time buyer (affects closing costs, not the payment)"
                     : "First-time buyer (affects transfer tax, not the payment)"}
               </span>
@@ -1591,14 +1567,9 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
             ))}
           </Group>
 
-          <Button
+          <Button className="font-sans text-[14px] text-link bg-transparent border border-line rounded-control py-1.75 px-2.75 cursor-pointer"
             type="button"
             onClick={onCopyConditions}
-            style={{
-              fontFamily: SANS, fontSize: 14, color: C.buy,
-              background: "transparent", border: "1px solid " + C.line,
-              borderRadius: "var(--ds-radius-control)", padding: "7px 11px", cursor: "pointer",
-            }}
           >
             Use my rent-vs-buy conditions
           </Button>
@@ -1608,20 +1579,17 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
       {/* ---- results ---- */}
       <div className="rvb-col">
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>
+          <h2 className="font-sans text-[21px] mb-0.5">
             Monthly payment
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14 }}>
+          <p className="font-sans text-[13px] text-ink-secondary mb-3.5">
             Principal and interest only — no tax, insurance,{" "}
             {us ? "HOA dues" : "strata"} or upkeep.
             {priceMode && " Canadian fixed rates compound semi-annually."}
           </p>
 
           {rows.length === 0 ? (
-            <div style={{
-              fontFamily: SANS, fontSize: 14, color: C.mute,
-              border: "1px dashed " + C.line, borderRadius: "var(--ds-radius-control)", padding: 16,
-            }}>
+            <div className="font-sans text-[14px] text-ink-secondary border border-dashed border-line rounded-control p-4">
               Put an amount into at least one option to see a payment.
             </div>
           ) : (
@@ -1632,64 +1600,46 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
                 const delta = Math.round(r.mo) - Math.round(minMo);
                 const isLow = r === cheapest;
                 return (
-                  <div key={r.key} style={{
-                    padding: "12px 0",
-                    borderBottom: n === rows.length - 1 ? "none" : "1px solid " + C.line,
-                  }}>
-                    <div className="flex items-baseline justify-between" style={{ gap: 10 }}>
-                      <span style={{ fontFamily: MONO, fontSize: 14, color: C.mute }}>
+                  <div className="py-3 px-0" key={r.key} style={{ borderBottom: n === rows.length - 1 ? "none" : "1px solid " + C.line }}>
+                    <div className="flex items-baseline justify-between gap-2.5">
+                      <span className="font-sans text-[14px] text-ink-secondary">
                         {usd(r.amt)}
                         {priceMode && (
-                          <span style={{ color: C.mute }}>
+                          <span className="text-ink-secondary">
                             {"  →  "}{usd(r.loan)} mortgage
                           </span>
                         )}
                       </span>
-                      <span style={{
-                        fontFamily: MONO, fontSize: 19, fontWeight: 600,
-                        color: isLow ? C.buy : C.ink, whiteSpace: "nowrap",
-                      }}>
-                        {usd(r.mo)}<span style={{ fontSize: 14, color: C.mute }}>/mo</span>
+                      <span className="font-sans text-[19px] font-semibold whitespace-nowrap" style={{ color: isLow ? C.buy : C.ink }}>
+                        {usd(r.mo)}<span className="text-[14px] text-ink-secondary">/mo</span>
                       </span>
                     </div>
 
                     {/* the bar is the comparison; the numbers are the detail */}
-                    <div style={{
-                      height: 8, borderRadius: 999, background: C.panelAlt,
-                      marginTop: 8, marginBottom: 7, overflow: "hidden",
-                    }}>
-                      <div style={{
-                        width: (maxMo > 0 ? (r.mo / maxMo) * 100 : 0) + "%",
-                        height: "100%", borderRadius: 999,
-                        background: BUY_TINTS[Math.min(n, BUY_TINTS.length - 1)],
-                        transition: "width .35s cubic-bezier(.4,0,.2,1)",
-                      }} />
+                    <div className="h-2 rounded-[999px] bg-overlay mt-2 mb-1.75 overflow-hidden">
+                      <div className="h-full rounded-[999px]" style={{ width: (maxMo > 0 ? (r.mo / maxMo) * 100 : 0) + "%", background: BUY_TINTS[Math.min(n, BUY_TINTS.length - 1)], transition: "width .35s cubic-bezier(.4,0,.2,1)" }} />
                     </div>
 
-                    <div className="flex items-baseline justify-between" style={{ gap: 10 }}>
-                      <span style={{ fontFamily: SANS, fontSize: 13, color: C.mute }}>
+                    <div className="flex items-baseline justify-between gap-2.5">
+                      <span className="font-sans text-[13px] text-ink-secondary">
                         {isLow
                           ? "lowest payment"
                           : "+" + usd(delta) + "/mo  ·  +" + usd(delta * 12) + "/yr"}
                       </span>
-                      <span style={{ fontFamily: MONO, fontSize: 12, color: C.mute }}>
+                      <span className="font-sans text-[12px] text-ink-secondary">
                         {usd(r.interest)} interest over {trim(p.cmpAmort)} yr
                       </span>
                     </div>
 
                     {priceMode && r.belowMin && (
-                      <div style={{
-                        fontFamily: SANS, fontSize: 12, color: C.signal, marginTop: 5,
-                      }}>
+                      <div className="font-sans text-[12px] text-[var(--ds-warning-text)] mt-1.25">
                         {trim(p.cmpDownPct)}% is under the {trim(r.minDown)}% minimum down
                         {us ? " on a conventional loan" : " at this price"} — a lender
                         would not write this one.
                       </div>
                     )}
                     {priceMode && r.premiumPct > 0 && !r.belowMin && (
-                      <div style={{
-                        fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 5,
-                      }}>
+                      <div className="font-sans text-[12px] text-ink-secondary mt-1.25">
                         includes {trim(r.premiumPct)}% CMHC premium ({usd(r.premium)})
                         financed into the mortgage
                       </div>
@@ -1699,10 +1649,7 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
               })}
 
               {rows.length > 1 && (
-                <div style={{
-                  marginTop: 14, padding: "10px 12px", borderRadius: "var(--ds-radius-control)",
-                  background: C.panelAlt, fontFamily: SANS, fontSize: 14, color: C.ink,
-                }}>
+                <div className="mt-3.5 py-2.5 px-3 rounded-control bg-overlay font-sans text-[14px] text-ink">
                   Cheapest to dearest is{" "}
                   <b>{usd(Math.round(maxMo) - Math.round(minMo))} a month</b>, or{" "}
                   <b>{usd((Math.round(maxMo) - Math.round(minMo)) * 12)} a year</b>.
@@ -1710,9 +1657,7 @@ function PaymentsTab({ raw, set, p, rows, onCopyConditions }) {
               )}
 
               {priceMode && rows.length > 0 && (
-                <div style={{
-                  marginTop: 10, fontFamily: SANS, fontSize: 12, color: C.mute,
-                }}>
+                <div className="mt-2.5 font-sans text-[12px] text-ink-secondary">
                   Transfer tax at these prices:{" "}
                   {rows.map((r, n) => (
                     <span key={r.key}>
@@ -1832,10 +1777,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
   const signed = (v, fmt) =>
     Math.abs(v) < 0.5 ? "—" : (v > 0 ? "+" : "") + fmt(v);
   const cell = (v, tone, strong) => (
-    <span style={{
-      fontFamily: MONO, fontSize: "var(--cmp-num, 14px)", textAlign: "right",
-      color: tone || C.ink, fontWeight: strong ? 600 : 400, whiteSpace: "nowrap",
-    }}>{v}</span>
+    <span className="font-sans text-right whitespace-nowrap" style={{ fontSize: "var(--cmp-num, 14px)", color: tone || C.ink, fontWeight: strong ? 600 : 400 }}>{v}</span>
   );
 
   return (
@@ -1843,44 +1785,34 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
         {winner === null ? (
-          <p style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15, marginTop: 10 }}>
+          <p className="font-sans text-[30px] leading-[1.15] mt-2.5">
             Both properties land in the same place.
           </p>
         ) : (
-          <p style={{ fontFamily: SERIF, fontSize: 30, lineHeight: 1.15, marginTop: 10 }}>
+          <p className="font-sans text-[30px] leading-[1.15] mt-2.5">
             Property {winner} leaves you{" "}
-            <span style={{
-              color: C.ink,
-            }}>{usd(Math.abs(gap))}</span>{" "}
+            <span className="text-ink">{usd(Math.abs(gap))}</span>{" "}
             better off after {trim(p.horizonYears)} years.
           </p>
         )}
-        <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, marginTop: 10, maxWidth: 760 }}>
+        <p className="font-sans text-[14px] text-ink-secondary mt-2.5 max-w-[760px]">
           Both properties share the same renting alternative. Monthly savings are invested.
         </p>
 
         <div className="rvb-pair mt-4">
           {[["A", a, advA], ["B", b, advB]].map(([id, r, adv]) => (
-            <div key={id} style={{
-              border: "1px solid " + (winner === id ? C.buy : C.line),
-              borderRadius: "var(--ds-radius-control)", padding: "12px 14px",
-              background: winner === id ? C.panelAlt : "transparent",
-            }}>
-              <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute }}>
+            <div className="rounded-control py-3 px-3.5" key={id} style={{ border: "1px solid " + (winner === id ? C.buy : C.line), background: winner === id ? C.panelAlt : "transparent" }}>
+              <div className="font-sans text-[13px] text-ink-secondary">
                 Property {id} · {usd(id === "A" ? pa.homePrice : pb.homePrice)}
               </div>
-              <div style={{
-                fontFamily: MONO, fontSize: 22, fontWeight: 600, marginTop: 4,
-                color: adv >= 0 ? C.buy : C.rent,
-              }}>
+              <div className="font-sans text-[22px] font-semibold mt-1" style={{ color: adv >= 0 ? C.buy : C.rent }}>
                 {adv >= 0 ? "+" : "−"}{usd(Math.abs(adv))}
               </div>
-              <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 2 }}>
+              <div className="font-sans text-[13px] text-ink-secondary mt-0.5">
                 {adv >= 0 ? "ahead of renting" : "behind renting"} at year {trim(p.horizonYears)}
               </div>
-              <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 5,
-                            borderTop: "1px dotted " + C.line, paddingTop: 5 }}>
-                starts with <b style={{ color: C.ink, fontWeight: 600 }}>
+              <div className="font-sans text-[13px] text-ink-secondary mt-1.25 border-t border-dotted border-line pt-1.25">
+                starts with <b className="text-ink font-semibold">
                 {usd((id === "A" ? pa : pb).keepInvested)}</b> still invested
               </div>
             </div>
@@ -1888,17 +1820,14 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
         </div>
 
         {/* scrub the horizon and watch the verdict move */}
-        <div style={{ marginTop: 16, borderTop: "1px solid " + C.line, paddingTop: 14 }}>
+        <div className="mt-4 border-t border-line pt-3.5">
           <SliderRow label="Time period" value={p.horizonYears}
                      onChange={set("horizonYears")}
                      min={1} max={30} step={1} suffix="yr" accent={C.buy} />
         </div>
 
         {(a.shortfall > 0.5 || b.shortfall > 0.5) && (
-          <div style={{
-            marginTop: 14, padding: "9px 12px", borderRadius: "var(--ds-radius-control)",
-            background: C.warnBg, fontFamily: SANS, fontSize: 13, color: C.warnInk,
-          }}>
+          <div className="mt-3.5 py-2.25 px-3 rounded-control bg-[var(--ds-error-bg)] font-sans text-[13px] text-[var(--ds-error-text)]">
             Your cash does not cover the down payment and closing on{" "}
             {a.shortfall > 0.5 && b.shortfall > 0.5 ? "either property"
               : a.shortfall > 0.5 ? "Property A" : "Property B"}
@@ -1911,10 +1840,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
           </div>
         )}
         {(a.belowMin || b.belowMin) && (
-          <div style={{
-            marginTop: 10, padding: "9px 12px", borderRadius: "var(--ds-radius-control)",
-            background: C.panelAlt, fontFamily: SANS, fontSize: 13, color: C.signal,
-          }}>
+          <div className="mt-2.5 py-2.25 px-3 rounded-control bg-overlay font-sans text-[13px] text-[var(--ds-warning-text)]">
             The down payment on{" "}
             {a.belowMin && b.belowMin ? "both properties is" :
              a.belowMin ? "Property A is" : "Property B is"} below the minimum
@@ -1924,10 +1850,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
         )}
 
         {apprDiffers && (
-          <div style={{
-            marginTop: 14, padding: "9px 12px", borderRadius: "var(--ds-radius-control)",
-            background: C.warnBg, fontFamily: SANS, fontSize: 13, color: C.ink,
-          }}>
+          <div className="mt-3.5 py-2.25 px-3 rounded-control bg-[var(--ds-error-bg)] font-sans text-[13px] text-ink">
             These properties are set to appreciate at different rates
             ({trim(pa.apprPct)}% vs {trim(pb.apprPct)}%). Over{" "}
             {trim(p.horizonYears)} years that gap drives the result more than
@@ -1941,7 +1864,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
               would let one side win by financing rather than by merit) ---- */}
       <Panel className="mb-5">
         <Eyebrow>Paying for renovations</Eyebrow>
-        <div style={{ marginTop: 10, marginBottom: 12 }}>
+        <div className="mt-2.5 mb-3">
           <Segmented
             options={[[false, "From investments"], [true, "From a line of credit"]]}
             value={locMode}
@@ -1959,7 +1882,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
                    hint="Interest-only minimum, paid monthly" />
           )}
         </div>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 8, maxWidth: 760 }}>
+        <p className="font-sans text-[13px] text-ink-secondary mt-2 max-w-[760px]">
           {locMode
             ? "Each property takes its closing costs out of this pot on day one and " +
               "the rest goes straight into the market. Renovations ride the line of " +
@@ -1978,14 +1901,10 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
         {["A", "B"].map((id) => (
           <Panel key={id}>
             <div className="flex items-center justify-between mb-1">
-              <h2 style={{ fontFamily: SERIF, fontSize: 20 }}>Property {id}</h2>
+              <h2 className="font-sans text-[20px]">Property {id}</h2>
               {id === "A" && (
-                <Button type="button" onClick={onLoadA}
-                  style={{
-                    fontFamily: SANS, fontSize: 13, color: C.buy,
-                    background: "transparent", border: "1px solid " + C.line,
-                    borderRadius: "var(--ds-radius-control)", padding: "5px 9px", cursor: "pointer",
-                  }}>
+                <Button className="font-sans text-[13px] text-link bg-transparent border border-line rounded-control py-1.25 px-2.25 cursor-pointer" type="button" onClick={onLoadA}
+                 >
                   Load my rent-vs-buy scenario
                 </Button>
               )}
@@ -2004,8 +1923,8 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
 
       {/* ---- side by side ---- */}
       <Panel>
-        <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>Side by side</h2>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14 }}>
+        <h2 className="font-sans text-[21px] mb-0.5">Side by side</h2>
+        <p className="font-sans text-[13px] text-ink-secondary mb-3.5">
           Monthly figures are year one. Everything else on this page — rate,
           amortisation, taxes, the rent being compared against — is shared, and
           lives on the first tab.
@@ -2026,12 +1945,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
               const box = { paddingTop: 6, paddingBottom: 6, borderTop: "1px dotted " + C.line, textAlign: "right" };
               return (
                 <tr key={label}>
-                  <th scope="row" style={{
-                    fontFamily: SANS, fontSize: "var(--cmp-label, 14px)", paddingTop: 6, paddingBottom: 6,
-                    color: strong ? C.ink : C.mute,
-                    fontWeight: strong ? 600 : 400,
-                    borderTop: "1px dotted " + C.line,
-                  }}>{label}</th>
+                  <th className="font-sans pt-1.5 pb-1.5 border-t border-dotted border-line" scope="row" style={{ fontSize: "var(--cmp-label, 14px)", color: strong ? C.ink : C.mute, fontWeight: strong ? 600 : 400 }}>{label}</th>
                   <td style={box}>{cell(txt(av), null, strong)}</td>
                   <td style={box}>{cell(txt(bv), null, strong)}</td>
                   <td className="cmp-d" style={box}>
@@ -2045,7 +1959,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
           </tbody>
         </table>
 
-        <div style={{ borderTop: "1px solid " + C.line, marginTop: 14, paddingTop: 12 }}>
+        <div className="border-t border-line mt-3.5 pt-3">
           <Eyebrow>Over {trim(p.horizonYears)} years</Eyebrow>
           <div className="mt-2">
             <Row label="Home value at the horizon"
@@ -2084,7 +1998,7 @@ function CompareTab({ raw, set, p, cmp, onLoadA }) {
                  tone={C.buy} />
           </div>
           {(a.totRemodel > 0.5 || b.totRemodel > 0.5) && (
-            <div style={{ fontFamily: SANS, fontSize: 13, color: C.signal, marginTop: 8 }}>
+            <div className="font-sans text-[13px] text-[var(--ds-warning-text)] mt-2">
               The renovation ran past what was left invested after closing, so
               the remainder is being paid out of pocket. Raise your total
               available cash if that is not what you meant.
@@ -2155,19 +2069,19 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
-        <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+        <p className="font-sans text-[clamp(26px,4vw,40px)] leading-[1.1] mt-2.5">
           {ahead ? "This property beats" : "This property trails"} the market by{" "}
-          <span style={{ color: C.ink}}>
+          <span className="text-ink">
             {usd(Math.abs(adv))}
           </span>{" "}
           after {trim(p.horizonYears)} years.
         </p>
-        <p style={{ fontFamily: SANS, fontSize: 15, color: C.mute, marginTop: 12, maxWidth: 760, lineHeight: 1.5 }}>
+        <p className="font-sans text-[15px] text-ink-secondary mt-3 max-w-[760px] leading-[1.5]">
           The alternative is putting the whole {usd(iv.cashToClose)} of cash to
           close into the market at {trim(p.investPct)}% instead, and feeding it
           every dollar the property would have needed from you. Both sides are
           sold at the horizon and taxed. Owning pulls ahead{" "}
-          <strong style={{ color: C.ink, fontWeight: 600 }}>{be}</strong>.
+          <strong className="text-ink font-semibold">{be}</strong>.
         </p>
 
         <div className="rvb-metrics mt-5">
@@ -2190,15 +2104,14 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
                   tip="Rent collected, less operating costs, less the mortgage payment, less income tax. This is the number that decides whether you can actually hold the property, as opposed to whether it is a good investment." />
         </div>
 
-        <div style={{ marginTop: 18, borderTop: "1px solid " + C.line, paddingTop: 14 }}>
+        <div className="mt-4.5 border-t border-line pt-3.5">
           <SliderRow label="Time period" value={p.horizonYears}
                      onChange={set("horizonYears")}
                      min={1} max={30} step={1} suffix="yr" accent={C.buy} />
         </div>
 
         {iv.dscr < 1 && (
-          <div style={{ marginTop: 14, padding: "9px 12px", borderRadius: "var(--ds-radius-control)",
-                        background: C.warnBg, fontFamily: SANS, fontSize: 13, color: C.warnInk }}>
+          <div className="mt-3.5 py-2.25 px-3 rounded-control bg-[var(--ds-error-bg)] font-sans text-[13px] text-[var(--ds-error-text)]">
             Net operating income does not cover the mortgage
             (it covers {isFinite(iv.dscr) ? iv.dscr.toFixed(2) : "—"}× of it). Most lenders
             will not write this loan as an investment mortgage, and it needs
@@ -2209,27 +2122,26 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
 
       {/* ---- the units ---- */}
       <Panel className="mb-5">
-        <h2 style={{ fontFamily: SERIF, fontSize: 21, marginBottom: 2 }}>Rental units</h2>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14 }}>
+        <h2 className="font-sans text-[21px] mb-0.5">Rental units</h2>
+        <p className="font-sans text-[13px] text-ink-secondary mb-3.5">
           {usd(iv.grossMonthlyRent)} a month across {units}{" "}
           {units === 1 ? "unit" : "units"}, before vacancy.
         </p>
 
-        <div className="flex flex-wrap items-center gap-3" style={{ marginBottom: 14 }}>
-          <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>Units</span>
+        <div className="flex flex-wrap items-center gap-3 mb-3.5">
+          <span className="font-sans text-[14px] text-ink-secondary">Units</span>
           <Segmented
             options={[1, 2, 3, 4, 5, 6].map((n) => [n, String(n)])}
             value={units}
             onChange={(n) => set("ivUnitCount")(n)}
           />
-          <label className="flex items-center gap-2 cursor-pointer" style={{ marginLeft: 4 }}>
-            <input
+          <label className="flex items-center gap-2 cursor-pointer ml-1">
+            <input className="accent-link w-3.5 h-3.5"
               type="checkbox"
               checked={same}
               onChange={(e) => set("ivSameRent")(e.target.checked)}
-              style={{ accentColor: C.buy, width: 14, height: 14 }}
             />
-            <span style={{ fontFamily: SANS, fontSize: 14 }}>
+            <span className="font-sans text-[14px]">
               Same rent for every unit
             </span>
           </label>
@@ -2250,7 +2162,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
           ))}
         </div>
         {same && units > 1 && (
-          <p style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 8 }}>
+          <p className="font-sans text-[12px] text-ink-secondary mt-2">
             Unit 1's rent is being applied to all {units}. Untick the box and
             your original per-unit figures come back exactly as they were; type
             over any unit instead and it keeps what is on screen, with that one
@@ -2262,7 +2174,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
       {/* ---- inputs ---- */}
       <div className="rvb-pair mb-5">
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 12 }}>The purchase</h2>
+          <h2 className="font-sans text-[20px] mb-3">The purchase</h2>
           <div className="ds-field-grid rvb-fields">
             <Field label="Purchase price" prefix="$" step={25000}
                    value={raw.ivPrice} onChange={set("ivPrice")} />
@@ -2298,7 +2210,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
         </Panel>
 
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 12 }}>Running it</h2>
+          <h2 className="font-sans text-[20px] mb-3">Running it</h2>
           <div className="ds-field-grid rvb-fields">
             <Field label="Vacancy" suffix="%" step={1}
                    value={raw.ivVacancyPct} onChange={set("ivVacancyPct")}
@@ -2332,7 +2244,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
                    hint="Of the rent you collect"
                    tip="What an agency charges to find tenants, collect rent and take the 2am phone call. Set it to zero if you will do it yourself — but that is a job, not a saving." />
           </div>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 12, lineHeight: 1.45 }}>
+          <p className="font-sans text-[13px] text-ink-secondary mt-3 leading-[1.45]">
             Fixed costs grow with inflation at {trim(p.inflPct)}%; the three
             percentages scale with collected rent. None of them are part of net
             operating income's opposite number — the mortgage deliberately stays
@@ -2344,10 +2256,10 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
 
       {/* ---- what the money would otherwise have done ---- */}
       <Panel className="mb-5">
-        <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>
+        <h2 className="font-sans text-[20px] mb-0.5">
           What the money would otherwise have done
         </h2>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14, maxWidth: 860, lineHeight: 1.5 }}>
+        <p className="font-sans text-[13px] text-ink-secondary mb-3.5 max-w-[860px] leading-[1.5]">
           The whole verdict on this page is a comparison against investing
           instead, so this rate is the single assumption it leans on hardest.
           It is shared with the other tabs — change it here and the rent-versus-buy
@@ -2372,7 +2284,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
                  tip="The rate on the next dollar you earn. Rental profit is taxed at this rate, and a rental loss is worth this much back to you." />
         </div>
 
-        <div style={{ marginTop: 16, borderTop: "1px solid " + C.line, paddingTop: 12 }}>
+        <div className="mt-4 border-t border-line pt-3">
           <Eyebrow>What counts as opportunity cost here</Eyebrow>
           <div className="mt-2">
             <Row label="Cash to close, invested instead from day one"
@@ -2385,7 +2297,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
             <Row label="Both sides sold and taxed at the horizon" value="Yes"
                  tip="Neither side gets to finish holding an untaxed gain. The property pays selling costs, capital gains and depreciation recapture; the portfolio pays tax on its growth." />
           </div>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 10, maxWidth: 860, lineHeight: 1.5 }}>
+          <p className="font-sans text-[13px] text-ink-secondary mt-2.5 max-w-[860px] leading-[1.5]">
             Positive cash flow goes the other way — into a portfolio on the
             property's side, at the same rate — so neither side gets free money
             sitting idle in a chequing account.
@@ -2395,10 +2307,10 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
 
       {/* ---- depreciation and tax ---- */}
       <Panel className="mb-5">
-        <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>
+        <h2 className="font-sans text-[20px] mb-0.5">
           Depreciation and tax
         </h2>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14, maxWidth: 820 }}>
+        <p className="font-sans text-[13px] text-ink-secondary mb-3.5 max-w-[820px]">
           {us
             ? "Residential rental property is written off straight-line over 27.5 years, " +
               "and it is not optional — the IRS recaptures it at sale whether or not you " +
@@ -2419,14 +2331,13 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
           )}
         </div>
         {!us && (
-          <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 12 }}>
-            <input
+          <label className="flex items-center gap-2 cursor-pointer mt-3">
+            <input className="accent-link w-3.5 h-3.5"
               type="checkbox"
               checked={!!raw.ivCCA}
               onChange={(e) => set("ivCCA")(e.target.checked)}
-              style={{ accentColor: C.buy, width: 14, height: 14 }}
             />
-            <span style={{ fontFamily: SANS, fontSize: 14 }}>
+            <span className="font-sans text-[14px]">
               Claim capital cost allowance (Class 1, 4% declining)
             </span>
           </label>
@@ -2440,7 +2351,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
           <Row label="Tax on the sale" value={usd(iv.exitTax)} />
         </div>
         {us && iv.suspendedPAL > 0.5 && (
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.signal, marginTop: 8, maxWidth: 820 }}>
+          <p className="font-sans text-[13px] text-[var(--ds-warning-text)] mt-2 max-w-[820px]">
             Your income is high enough that the $25,000 active-participation
             allowance is partly or fully phased out, so {usd(iv.suspendedPAL)} of
             rental losses cannot be deducted as they happen. They are not lost —
@@ -2448,7 +2359,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
           </p>
         )}
         {!us && (
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 8, maxWidth: 820 }}>
+          <p className="font-sans text-[13px] text-ink-secondary mt-2 max-w-[820px]">
             Canadian rental losses are deductible against your other income in
             the year they happen — the opposite of the US rule, where a
             high earner's losses wait until the sale.
@@ -2459,8 +2370,8 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
       {/* ---- year one, line by line ---- */}
       <div className="rvb-pair mb-5">
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Year one</h2>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
+          <h2 className="font-sans text-[20px] mb-0.5">Year one</h2>
+          <p className="font-sans text-[13px] text-ink-secondary mb-3">
             Annual figures. This is the statement a lender or a partner asks for.
           </p>
           <div>
@@ -2472,10 +2383,10 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
         </Panel>
 
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>
+          <h2 className="font-sans text-[20px] mb-0.5">
             Over {trim(p.horizonYears)} years
           </h2>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
+          <p className="font-sans text-[13px] text-ink-secondary mb-3">
             Everything the property collected, spent and owed, then what is left
             when you sell.
           </p>
@@ -2499,19 +2410,19 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
       {/* ---- the chart ---- */}
       <Panel>
         <div className="flex items-baseline justify-between mb-1">
-          <h2 style={{ fontFamily: SERIF, fontSize: 21 }}>Property against the market</h2>
+          <h2 className="font-sans text-[21px]">Property against the market</h2>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-2">
-              <span style={{ width: 14, height: 3, background: C.buyLine, display: "inline-block" }} />
-              <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Property</span>
+              <span className="w-3.5 h-0.75 bg-chart-2 inline-block" />
+              <span className="font-sans text-[13px] text-link">Property</span>
             </span>
             <span className="flex items-center gap-2">
-              <span style={{ width: 14, height: 3, background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)", display: "inline-block" }} />
-              <span style={{ fontFamily: MONO, fontSize: 13, color: C.rent }}>The market</span>
+              <span className="w-3.5 h-0.75 inline-block" style={{ background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)" }} />
+              <span className="font-sans text-[13px] text-chart-1">The market</span>
             </span>
           </div>
         </div>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 10 }}>
+        <p className="font-sans text-[13px] text-ink-secondary mb-2.5">
           Both lines are after selling costs and tax, at every month — what you
           would actually walk away with if you got out that day.
         </p>
@@ -2537,16 +2448,13 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
                   const d = payload[0].payload;
                   const lead = d.buy - d.rent;
                   return (
-                    <div style={{
-                      background: C.field, border: "1px solid " + C.line,
-                      borderRadius: "var(--ds-radius-control)", padding: "8px 10px", fontFamily: MONO, fontSize: 14,
-                    }}>
-                      <div style={{ color: C.mute, fontSize: 12, marginBottom: 4 }}>
+                    <div className="bg-raised border border-line rounded-control py-2 px-2.5 font-sans text-[14px]">
+                      <div className="text-ink-secondary text-[12px] mb-1">
                         {d.t === 0 ? "Today" : "Year " + d.t.toFixed(1)}
                       </div>
-                      <div style={{ color: C.buy }}>Property · {usd(d.buy)}</div>
-                      <div style={{ color: C.rent }}>Market · {usd(d.rent)}</div>
-                      <div style={{ color: C.ink, marginTop: 4, borderTop: "1px solid " + C.line, paddingTop: 4 }}>
+                      <div className="text-link">Property · {usd(d.buy)}</div>
+                      <div className="text-chart-1">Market · {usd(d.rent)}</div>
+                      <div className="text-ink mt-1 border-t border-line pt-1">
                         {lead >= 0 ? "Property" : "Market"} ahead {usd(Math.abs(lead))}
                       </div>
                     </div>
@@ -2565,7 +2473,7 @@ function InvestTab({ raw, set, setRaw, p, iv }) {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 12, maxWidth: 900, lineHeight: 1.5 }}>
+        <p className="font-sans text-[13px] text-ink-secondary mt-3 max-w-[900px] leading-[1.5]">
           The rate of return, the fee drag and the capital gains rate all come
           from the first tab, so this is measured against the same market you
           are comparing your own home to. Negative cash flow is paid to the
@@ -2596,7 +2504,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
     : (
       <>
         Investing instead beats prepaying above{" "}
-        <span style={{ color: C.ink}}>
+        <span className="text-ink">
           {trim(pp.hurdle)}%
         </span>{" "}
         a year.
@@ -2607,10 +2515,10 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
     <>
       {/* ---- the verdict ---- */}
       <Panel className="mb-5">
-        <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+        <p className="font-sans text-[clamp(26px,4vw,40px)] leading-[1.1] mt-2.5">
           {headline}
         </p>
-        <p style={{ fontFamily: SANS, fontSize: 14, color: C.mute, marginTop: 8, maxWidth: 820, lineHeight: 1.5 }}>
+        <p className="font-sans text-[14px] text-ink-secondary mt-2 max-w-[820px] leading-[1.5]">
           Prepaying saves interest at your mortgage rate. Investment returns are uncertain and may be taxed; the hurdle rate accounts for that tradeoff.
         </p>
 
@@ -2647,8 +2555,8 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
       {/* ---- terms + levers ---- */}
       <div className="rvb-pair mb-5">
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Mortgage terms</h2>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
+          <h2 className="font-sans text-[20px] mb-0.5">Mortgage terms</h2>
+          <p className="font-sans text-[13px] text-ink-secondary mb-3">
             A standalone loan — not tied to the price on the first tab.
           </p>
           <div className="ds-field-grid rvb-fields">
@@ -2663,21 +2571,16 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                      onChange={set("ppRenewalRate")} hint="The big unknown" />
             )}
           </div>
-          <Button
+          <Button className="mt-3.5 font-sans text-[14px] text-link bg-transparent border border-line rounded-control py-1.75 px-2.75 cursor-pointer"
             type="button"
             onClick={onCopyConditions}
-            style={{
-              marginTop: 14, fontFamily: SANS, fontSize: 14, color: C.buy,
-              background: "transparent", border: "1px solid " + C.line,
-              borderRadius: "var(--ds-radius-control)", padding: "7px 11px", cursor: "pointer",
-            }}
           >
             Use my rent-vs-buy conditions
           </Button>
         </Panel>
 
         <Panel>
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 10 }}>How you're paying it down</h2>
+          <h2 className="font-sans text-[20px] mb-2.5">How you're paying it down</h2>
           <Segmented
             options={[[false, "Add extra payments"], [true, "Target an amortization"]]}
             value={modeB}
@@ -2695,12 +2598,12 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                     : undefined}
                 />
               </div>
-              <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 10, lineHeight: 1.5 }}>
+              <p className="font-sans text-[13px] text-ink-secondary mt-2.5 leading-[1.5]">
                 The extra-payment levers are off in this mode: a lump sum would
                 make the target date wrong, and bi-weekly is redundant once the
                 payment has already been solved for.
                 {pp.targetTooLong && (
-                  <><br /><span style={{ color: C.signal }}>
+                  <><br /><span className="text-[var(--ds-warning-text)]">
                     {trim(p.ppTargetAmort)} years isn't shorter than the{" "}
                     {trim(p.ppAmort)}-year amortization, so the closest valid
                     target is shown instead.
@@ -2721,23 +2624,23 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                 <Field label="In year" step={1}
                        value={raw.ppOneTimeYear} onChange={set("ppOneTimeYear")} />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 10 }}>
-                <input type="checkbox" checked={!!raw.ppBiweekly}
+              <label className="flex items-center gap-2 cursor-pointer mt-2.5">
+                <input className="accent-link w-3.5 h-3.5" type="checkbox" checked={!!raw.ppBiweekly}
                        onChange={(e) => set("ppBiweekly")(e.target.checked)}
-                       style={{ accentColor: C.buy, width: 14, height: 14 }} />
-                <span style={{ fontFamily: SANS, fontSize: 14 }}>
+                       />
+                <span className="font-sans text-[14px]">
                   Accelerated bi-weekly (one extra monthly payment a year)
                 </span>
               </label>
               {p.ppBiweekly && (
-                <p style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 8, lineHeight: 1.5 }}>
+                <p className="font-sans text-[12px] text-ink-secondary mt-2 leading-[1.5]">
                   Modelled as that extra payment spread evenly across the
                   months; a true 26-payment schedule pays off one to three
                   months sooner than shown, so this is the conservative figure.
                 </p>
               )}
               {pp.oneTimeDropped && (
-                <p style={{ fontFamily: SANS, fontSize: 12, color: C.signal, marginTop: 8, lineHeight: 1.5 }}>
+                <p className="font-sans text-[12px] text-[var(--ds-warning-text)] mt-2 leading-[1.5]">
                   That lump lands after the mortgage would already be paid
                   off, so it isn't applied.
                 </p>
@@ -2749,8 +2652,8 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
 
       {/* ---- what the money would otherwise have done ---- */}
       <Panel className="mb-5">
-        <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Opportunity cost</h2>
-        <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14, maxWidth: 860, lineHeight: 1.5 }}>
+        <h2 className="font-sans text-[20px] mb-0.5">Opportunity cost</h2>
+        <p className="font-sans text-[13px] text-ink-secondary mb-3.5 max-w-[860px] leading-[1.5]">
           The hurdle above turns on this rate more than anything else on the
           page. It's shared with the other tabs — change it here and every
           answer that depends on it moves too.
@@ -2773,11 +2676,11 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
         </div>
 
         {R.itemizes && (
-          <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 4 }}>
-            <input type="checkbox" checked={!!raw.ppDeduct}
+          <label className="flex items-center gap-2 cursor-pointer mt-1">
+            <input className="accent-link w-3.5 h-3.5" type="checkbox" checked={!!raw.ppDeduct}
                    onChange={(e) => set("ppDeduct")(e.target.checked)}
-                   style={{ accentColor: C.buy, width: 14, height: 14 }} />
-            <span style={{ fontFamily: SANS, fontSize: 14 }}>
+                   />
+            <span className="font-sans text-[14px]">
               I itemize, and my other deductions already exceed the standard
               deduction — credit the mortgage-interest deduction to the side
               that's paying more interest
@@ -2785,7 +2688,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
           </label>
         )}
 
-        <div style={{ marginTop: 16, borderTop: "1px solid " + C.line, paddingTop: 12 }}>
+        <div className="mt-4 border-t border-line pt-3">
           <Eyebrow>What counts as opportunity cost here</Eyebrow>
           <div className="mt-2">
             <Row label="If you prepay: portfolio from the freed-up payment, once the mortgage is gone"
@@ -2799,7 +2702,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                  tone={noLoan ? undefined : ahead ? C.buy : C.rent} />
           </div>
           {pp.itemizing && (
-            <p style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 10, lineHeight: 1.5 }}>
+            <p className="font-sans text-[12px] text-ink-secondary mt-2.5 leading-[1.5]">
               Prepaying also forfeits some of the mortgage-interest deduction —{" "}
               {usd(Math.max(0, pp.refundForfeited))} of it, credited back to
               whichever side paid the interest.
@@ -2811,8 +2714,8 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
       {/* ---- renewal exposure, Canada only ---- */}
       {pp.renews && pp.renewals.length > 0 && (
         <Panel className="mb-5">
-          <h2 style={{ fontFamily: SERIF, fontSize: 20, marginBottom: 2 }}>Renewal exposure</h2>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12, maxWidth: 860, lineHeight: 1.5 }}>
+          <h2 className="font-sans text-[20px] mb-0.5">Renewal exposure</h2>
+          <p className="font-sans text-[13px] text-ink-secondary mb-3 max-w-[860px] leading-[1.5]">
             Every {trim(p.ppTermYears)} years the rate resets and the payment
             is recalculated on whatever's left. A smaller balance means a
             smaller jump — but your lender will offer the lower payment a
@@ -2820,14 +2723,14 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
             amount for the surplus to keep prepaying the mortgage.
           </p>
           {pp.renewals.map((rn, idx) => (
-            <div key={idx} className="flex items-baseline justify-between"
-                 style={{ padding: "6px 0", borderBottom: idx === pp.renewals.length - 1 ? "none" : "1px dotted " + C.line, gap: 10 }}>
-              <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>Year {trim(rn.year)}</span>
-              <span style={{ fontFamily: MONO, fontSize: 14 }}>
-                <span style={{ color: C.rent }}>invest {usd(rn.investPmt)}/mo</span>
-                <span style={{ color: C.mute }}> (bal {usd(rn.investBalance)})  ·  </span>
-                <span style={{ color: C.buy }}>prepay {usd(rn.prepayPmt)}/mo</span>
-                <span style={{ color: C.mute }}> (bal {usd(rn.prepayBalance)})</span>
+            <div key={idx} className="flex items-baseline justify-between py-1.5 px-0 gap-2.5"
+                 style={{ borderBottom: idx === pp.renewals.length - 1 ? "none" : "1px dotted " + C.line }}>
+              <span className="font-sans text-[14px] text-ink-secondary">Year {trim(rn.year)}</span>
+              <span className="font-sans text-[14px]">
+                <span className="text-chart-1">invest {usd(rn.investPmt)}/mo</span>
+                <span className="text-ink-secondary"> (bal {usd(rn.investBalance)})  ·  </span>
+                <span className="text-link">prepay {usd(rn.prepayPmt)}/mo</span>
+                <span className="text-ink-secondary"> (bal {usd(rn.prepayBalance)})</span>
               </span>
             </div>
           ))}
@@ -2836,10 +2739,7 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
 
       {/* ---- prepayment privilege warning, Canada only ---- */}
       {pp.hasPrivilege && pp.privilege && pp.privilege.breached && (
-        <div className="mb-5" style={{
-          background: C.warnBg, border: "1px solid " + C.line, borderRadius: "var(--ds-radius-control)",
-          padding: "12px 16px", fontFamily: SANS, fontSize: 13, color: C.warnInk, lineHeight: 1.5,
-        }}>
+        <div className="mb-5 bg-[var(--ds-error-bg)] border border-line rounded-control py-3 px-4 font-sans text-[13px] text-[var(--ds-error-text)] leading-[1.5]">
           In year {pp.privilege.worstYear} your extra payments reach{" "}
           {trim(pp.privilege.worstYearPct)}% of the original principal — over
           most lenders' {trim(p.ppPrivilegePct)}% annual prepayment privilege.
@@ -2852,19 +2752,19 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
       {!noLoan && (
         <Panel>
           <div className="flex items-baseline justify-between mb-1">
-            <h2 style={{ fontFamily: SERIF, fontSize: 21 }}>Net position over time</h2>
+            <h2 className="font-sans text-[21px]">Net position over time</h2>
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-2">
-                <span style={{ width: 14, height: 3, background: C.buyLine, display: "inline-block" }} />
-                <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Prepay</span>
+                <span className="w-3.5 h-0.75 bg-chart-2 inline-block" />
+                <span className="font-sans text-[13px] text-link">Prepay</span>
               </span>
               <span className="flex items-center gap-2">
-                <span style={{ width: 14, height: 3, background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)", display: "inline-block" }} />
-                <span style={{ fontFamily: MONO, fontSize: 13, color: C.rent }}>Invest instead</span>
+                <span className="w-3.5 h-0.75 inline-block" style={{ background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)" }} />
+                <span className="font-sans text-[13px] text-chart-1">Invest instead</span>
               </span>
             </div>
           </div>
-          <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 10 }}>
+          <p className="font-sans text-[13px] text-ink-secondary mb-2.5">
             After-tax portfolio value minus whatever's still owed, at every
             point along the way.
           </p>
@@ -2890,16 +2790,13 @@ function PrepayTab({ raw, set, p, pp, onCopyConditions }) {
                     const d = payload[0].payload;
                     const lead = d.prepay - d.invest;
                     return (
-                      <div style={{
-                        background: C.field, border: "1px solid " + C.line,
-                        borderRadius: "var(--ds-radius-control)", padding: "8px 10px", fontFamily: MONO, fontSize: 14,
-                      }}>
-                        <div style={{ color: C.mute, fontSize: 12, marginBottom: 4 }}>
+                      <div className="bg-raised border border-line rounded-control py-2 px-2.5 font-sans text-[14px]">
+                        <div className="text-ink-secondary text-[12px] mb-1">
                           {d.t === 0 ? "Today" : "Year " + d.t.toFixed(1)}
                         </div>
-                        <div style={{ color: C.buy }}>Prepay · {usd(d.prepay)}</div>
-                        <div style={{ color: C.rent }}>Invest · {usd(d.invest)}</div>
-                        <div style={{ color: C.ink, marginTop: 4, borderTop: "1px solid " + C.line, paddingTop: 4 }}>
+                        <div className="text-link">Prepay · {usd(d.prepay)}</div>
+                        <div className="text-chart-1">Invest · {usd(d.invest)}</div>
+                        <div className="text-ink mt-1 border-t border-line pt-1">
                           {lead >= 0 ? "Prepay" : "Invest"} ahead {usd(Math.abs(lead))}
                         </div>
                       </div>
@@ -3443,80 +3340,12 @@ export default function RentVsBuy() {
           ? 12
           : Math.round(r.breakeven * 12) % 12);
 
-  const css = `
-    .rvb input[type=number]::-webkit-outer-spin-button,
-    .rvb input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    .rvb input[type=number] { -moz-appearance: textfield; }
-    .rvb table { border-collapse: collapse; }
-    @media (prefers-reduced-motion: reduce) { .rvb * { transition: none !important; } }
-
-    /* Shell: widen as the screen does, instead of stranding it at 1180px */
-    .rvb-shell { max-width: 1180px; margin-left: auto; margin-right: auto; }
-    @media (min-width: 1360px) { .rvb-shell { max-width: 1300px; } }
-    @media (min-width: 1500px) { .rvb-shell { max-width: 1400px; } }
-    @media (min-width: 1700px) { .rvb-shell { max-width: 1580px; } }
-    @media (min-width: 1900px) { .rvb-shell { max-width: 1720px; } }
-    @media (min-width: 2200px) { .rvb-shell { max-width: 1900px; } }
-
-    /* Inputs beside results */
-    .rvb-main { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
-    @media (min-width: 1024px) { .rvb-main { grid-template-columns: 340px minmax(0, 1fr); } }
-    @media (min-width: 1500px) { .rvb-main { grid-template-columns: 372px minmax(0, 1fr); } }
-    @media (min-width: 1900px) { .rvb-main { grid-template-columns: 400px minmax(0, 1fr); } }
-    .rvb-col { min-width: 0; }
-
-    /* Cards that pair up once there is room for them */
-    .rvb-pair { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
-    @media (min-width: 860px) { .rvb-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    .rvb-pair-wide { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
-    @media (min-width: 1500px) { .rvb-pair-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-    /* Rental units: as many across as fit, rather than two very wide ones */
-    .rvb-units { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    @media (min-width: 700px) { .rvb-units { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-    @media (min-width: 1100px) { .rvb-units { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
-
-    /* Metric strip: four across when there is room, two up otherwise */
-    .rvb-metrics { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    @media (min-width: 1100px) { .rvb-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-
-    /* Side-by-side comparison; the difference column is the first to go */
-    .rvb-cmp { width: 100%; border-collapse: collapse; }
-    .rvb-cmp :is(th, td) { padding-left: 16px; vertical-align: baseline; }
-    .rvb-cmp :is(th[scope="row"], thead td) { width: 100%; padding-left: 0; text-align: left; hyphens: auto; }
-    .rvb-cmp thead th { text-align: right; font-weight: inherit; }
-    @media (max-width: 760px) {
-      .rvb-cmp .cmp-d { display: none; }
-    }
-    /* two money columns and the longest label have to share 242px at 320 */
-    @media (max-width: 400px) {
-      .rvb-cmp { --cmp-num: 12px; --cmp-label: 13px; }
-      .rvb-cmp :is(th, td) { padding-left: 8px; }
-    }
-
-    /* Tablet: the inputs span the full width, so fit more fields per row */
-    .rvb-fields { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    @media (min-width: 640px) and (max-width: 1023px) {
-      .rvb-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    }
-
-    /* Ledger: drop the secondary columns rather than force a sideways scroll */
-    @media (max-width: 700px) { .rvb-hide-sm { display: none; } }
-
-    /* A wider chart deserves to be taller too */
-    .rvb-chart { width: 100%; height: 300px; }
-    @media (min-width: 1400px) { .rvb-chart { height: 360px; } }
-    @media (min-width: 1900px) { .rvb-chart { height: 400px; } }
-  `;
 
   return (
     <div
-      className="rvb w-full"
-      style={{ background: C.bg, color: C.ink, fontFamily: SANS, minHeight: "100%" }}
+      className="rvb w-full bg-page text-ink font-sans min-h-full"
     >
-      <style>{css}</style>
-
-      <div className="rvb-shell px-5 py-8">
+      <div className="rvb-shell px-5 py-8 max-[621px]:px-4">
         <SiteHeader project="calculator" appearance={appearance.preference}
           onAppearanceChange={(value) => appearanceController.setPreference(value)} />
         {/* Local calculator navigation stays separate from the wider site. */}
@@ -3549,7 +3378,7 @@ export default function RentVsBuy() {
           ))}
 
           {/* Which country's rules the whole page runs on */}
-          <div className="ml-auto py-2 max-[620px]:order-first max-[620px]:ml-0 max-[620px]:basis-full">
+          <div className="ml-auto py-2 max-[621px]:order-first max-[621px]:ml-0 max-[621px]:basis-full">
             <Segmented
               options={[[false, "Canada"], [true, "United States"]]}
               value={!!raw.us}
@@ -3565,35 +3394,21 @@ export default function RentVsBuy() {
         {undo && (
           <div
             role="status"
-            className="flex flex-wrap items-center gap-3 mb-5"
-            style={{
-              background: C.panelAlt, border: "1px solid " + C.line,
-              borderRadius: "var(--ds-radius-control)", padding: "10px 14px",
-            }}
+            className="flex flex-wrap items-center gap-3 mb-5 bg-overlay border border-line rounded-control py-2.5 px-3.5"
           >
-            <span style={{ fontFamily: SANS, fontSize: 14, color: C.ink }}>
-              All calculators use <b style={{ fontWeight: 600 }}>{undo.to}</b> defaults. Your time period and household are kept.
+            <span className="font-sans text-[14px] text-ink">
+              All calculators use <b className="font-semibold">{undo.to}</b> defaults. Your time period and household are kept.
             </span>
-            <Button
+            <Button className="font-sans text-[13px] text-link bg-transparent border border-link rounded-control py-1 px-2.25 cursor-pointer"
               type="button"
               onClick={() => { setRaw(undo.raw); setUndo(null); }}
-              style={{
-                fontFamily: MONO, fontSize: 13, color: C.buy,
-                background: "transparent", border: "1px solid " + C.buy,
-                borderRadius: "var(--ds-radius-control)", padding: "4px 9px", cursor: "pointer",
-              }}
             >
               Undo
             </Button>
-            <Button
+            <Button className="ml-auto font-sans text-[14px] text-ink-secondary bg-transparent border-0 cursor-pointer leading-[1] p-0.5"
               type="button"
               aria-label="Dismiss"
               onClick={() => setUndo(null)}
-              style={{
-                marginLeft: "auto", fontFamily: MONO, fontSize: 14, color: C.mute,
-                background: "transparent", border: "none", cursor: "pointer",
-                lineHeight: 1, padding: 2,
-              }}
             >
               ✕
             </Button>
@@ -3603,13 +3418,13 @@ export default function RentVsBuy() {
         {notFound ? (
           <Panel>
             <Eyebrow as="p">Page not found</Eyebrow>
-            <p style={{ fontFamily: SERIF, fontSize: "clamp(26px, 4vw, 40px)", lineHeight: 1.1, marginTop: 10 }}>
+            <p className="font-sans text-[clamp(26px,4vw,40px)] leading-[1.1] mt-2.5">
               That page doesn't exist.
             </p>
-            <p style={{ fontFamily: SANS, fontSize: 15, color: C.mute, marginTop: 12, maxWidth: 640, lineHeight: 1.5 }}>
-              Nothing lives at <code style={{ fontFamily: MONO }}>{window.location.pathname}</code>.
+            <p className="font-sans text-[15px] text-ink-secondary mt-3 max-w-[640px] leading-[1.5]">
+              Nothing lives at <code className="font-sans">{window.location.pathname}</code>.
               Pick a calculator from the tabs above, or start with the{" "}
-              <a
+              <a className="text-link"
                 href="/"
                 onClick={(e) => {
                   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
@@ -3618,7 +3433,6 @@ export default function RentVsBuy() {
                   setTab("buy");
                   window.history.pushState(null, "", "/");
                 }}
-                style={{ color: C.buy }}
               >
                 rent vs. buy calculator
               </a>.
@@ -3693,37 +3507,18 @@ export default function RentVsBuy() {
           <div className="flex items-center justify-between mb-4">
             <p className="calc-context">Net worth after costs and taxes</p>
             <div className="flex items-center gap-2">
-            <Button
+            <Button className="font-sans text-[13px] bg-transparent rounded-control py-1 px-2.25 cursor-pointer"
               onClick={copyLink}
-              style={{
-                fontFamily: MONO,
-                fontSize: 13,
-                color: copied ? C.buy : C.ink,
-                background: "transparent",
-                border: "1px solid " + (copied ? C.buy : C.line),
-                borderRadius: "var(--ds-radius-control)",
-                padding: "4px 9px",
-                cursor: "pointer",
-              }}
+              style={{ color: copied ? C.buy : C.ink, border: "1px solid " + (copied ? C.buy : C.line) }}
             >
               {copied ? "Link copied" : "Copy link"}
             </Button>
-            <Button
+            <Button className="font-sans text-[13px] text-ink-secondary bg-transparent border border-line rounded-control py-1 px-2.25 cursor-pointer"
               onClick={() => {
                 // Reset to the region you are in, not back to Canada
                 const us = Boolean(raw.us);
                 setRaw({ ...DEFAULTS, ...(us ? REGIONS.us.defaults : {}), us });
                 window.history.replaceState(null, "", window.location.pathname);
-              }}
-              style={{
-                fontFamily: MONO,
-                fontSize: 13,
-                color: C.mute,
-                background: "transparent",
-                border: "1px solid " + C.line,
-                borderRadius: "var(--ds-radius-control)",
-                padding: "4px 9px",
-                cursor: "pointer",
               }}
             >
               Reset
@@ -3733,22 +3528,13 @@ export default function RentVsBuy() {
           {/* The verdict is the loudest thing on the page but it is not the
               page's heading — it is a computed figure that changes with every
               keystroke. The <h1> is the breadcrumb line above. */}
-          <p
-            style={{
-              fontFamily: SERIF,
-              fontWeight: 700,
-              fontSize: "clamp(28px, 5vw, 52px)",
-              lineHeight: 1.06,
-              letterSpacing: "-0.02em",
-              margin: 0,
-              maxWidth: 1020,
-            }}
+          <p className="font-sans font-bold text-[clamp(28px,5vw,52px)] leading-[1.06] tracking-[-0.02em] m-0 max-w-[1020px]"
           >
             {tooClose ? (
               <>
                 Over {p.horizonYears} {p.horizonYears === 1 ? "year" : "years"} it's
                 close: the two paths finish{" "}
-                <span style={{ color: C.ink}}>
+                <span className="text-ink">
                   {usd(Math.abs(r.advantage))}
                 </span>{" "}
                 apart.
@@ -3756,7 +3542,7 @@ export default function RentVsBuy() {
             ) : (
               <>
                 {winner} leaves you{" "}
-                <span style={{ color: C.ink}}>
+                <span className="text-ink">
                   {usd(Math.abs(r.advantage))}
                 </span>{" "}
                 ahead after {p.horizonYears}{" "}
@@ -3775,13 +3561,7 @@ export default function RentVsBuy() {
 
           {/* The two levers that move the answer most */}
           <div
-            className="mt-6"
-            style={{
-              background: C.panel,
-              border: "1px solid " + C.line,
-              borderRadius: "var(--ds-radius-control)",
-              padding: "12px 16px",
-            }}
+            className="mt-6 bg-raised border border-line rounded-control py-3 px-4"
           >
             <SliderRow
               label="How long you stay"
@@ -3793,7 +3573,7 @@ export default function RentVsBuy() {
               accent={winColor}
               suffix="yr"
             />
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid " + C.line }}>
+            <div className="mt-2.5 pt-2.5 border-t border-line">
               <SliderRow
                 label={US ? "Rental income" : "Suite rent"}
                 value={p.suiteRentMo}
@@ -3806,14 +3586,7 @@ export default function RentVsBuy() {
                 suffix="/mo"
                 format="money"
               />
-              <div
-                style={{
-                  fontFamily: SANS,
-                  fontSize: 12,
-                  color: C.mute,
-                  marginTop: 5,
-                  marginLeft: 130,
-                }}
+              <div className="font-sans text-[12px] text-ink-secondary mt-1.25 ml-32.5"
               >
                 {p.suiteRentMo > 0
                   ? "Nets " + usd(y1.suite) + "/mo after vacancy and tax, covering " +
@@ -3830,18 +3603,11 @@ export default function RentVsBuy() {
           {/* ---------------- INPUTS ---------------- */}
           <div className="rvb-col">
             <Panel>
-              <h2
-                style={{
-                  fontFamily: SERIF,
-                  fontSize: 19,
-                  fontWeight: 600,
-                  margin: 0,
-                  marginBottom: 2,
-                }}
+              <h2 className="font-sans text-[19px] font-semibold m-0 mb-0.5"
               >
                 Your numbers
               </h2>
-              <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14 }}>
+              <p className="font-sans text-[13px] text-ink-secondary mb-3.5">
                 Everything updates as you type.
               </p>
 
@@ -3853,14 +3619,14 @@ export default function RentVsBuy() {
                        tip="Conveyancing, the home inspection, and the cost of physically moving in. Paid on day one and never recovered." />
               </Group>
 
-              <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }} className="mb-6">
+              <div className="mb-6 border-t border-line pt-3.5">
                 <Eyebrow>{US ? "Closing costs" : "Property transfer tax"}</Eyebrow>
-                <div className="flex items-baseline justify-between" style={{ marginTop: 6 }}>
-                  <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>
+                <div className="flex items-baseline justify-between mt-1.5">
+                  <span className="font-sans text-[14px] text-ink-secondary">
                     {US ? "Title, escrow, recording and lender fees"
                         : "1% to $200k, 2% to $2M, 3% above"}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600, color: C.ink }}>
+                  <span className="font-sans text-[15px] font-semibold text-ink">
                     {usd(r.ptt)}
                   </span>
                 </div>
@@ -3872,27 +3638,26 @@ export default function RentVsBuy() {
                   </div>
                 ) : (
                   <>
-                    <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 8 }}>
-                      <input
+                    <label className="flex items-center gap-2 cursor-pointer mt-2">
+                      <input className="accent-link w-3.5 h-3.5"
                         type="checkbox"
                         checked={raw.firstTime}
                         onChange={(e) => set("firstTime")(e.target.checked)}
-                        style={{ accentColor: C.buy, width: 14, height: 14 }}
                       />
-                      <span style={{ fontFamily: SANS, fontSize: 14 }}>
+                      <span className="font-sans text-[14px]">
                         First-time buyer exemption
                       </span>
                     </label>
-                    <div style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 3 }}>
+                    <div className="font-sans text-[12px] text-ink-secondary mt-0.75">
                       Waives up to $8,000, and only under $860k.
                     </div>
                   </>
                 )}
               </div>
 
-              <div style={{ borderTop: "1px solid " + C.line, paddingTop: 14 }} className="mb-6">
+              <div className="mb-6 border-t border-line pt-3.5">
                 <Eyebrow>Where the down payment comes from</Eyebrow>
-                <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 4, lineHeight: 1.45 }}>
+                <div className="font-sans text-[13px] text-ink-secondary mt-1 leading-[1.45]">
                   {US
                     ? "Selling investments to raise the down payment costs you the tax on the " +
                       "gains — money the renter keeps working. Filing jointly doubles both the " +
@@ -3902,14 +3667,13 @@ export default function RentVsBuy() {
                       "years — which is separate from the BC transfer tax exemption above, so you can " +
                       "qualify for these at any price."}
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 8 }}>
-                  <input
+                <label className="flex items-center gap-2 cursor-pointer mt-2">
+                  <input className="accent-link w-3.5 h-3.5"
                     type="checkbox"
                     checked={raw.couple}
                     onChange={(e) => set("couple")(e.target.checked)}
-                    style={{ accentColor: C.buy, width: 14, height: 14 }}
                   />
-                  <span style={{ fontFamily: SANS, fontSize: 14 }}>
+                  <span className="font-sans text-[14px]">
                     {US ? "Married, filing jointly" : "Buying with a partner"}
                   </span>
                 </label>
@@ -3932,36 +3696,15 @@ export default function RentVsBuy() {
                     hint={r.saleTax > 0 ? "Tax to sell " + usd(r.saleTax) : "Triggers capital gains"}
                     badge={
                       p.autoBrokerage ? (
-                        <span
-                          style={{
-                            fontFamily: MONO,
-                            fontSize: 9,
-                            letterSpacing: "normal",
-                            color: C.buy,
-                            border: "1px solid " + C.buySoft,
-                            borderRadius: 2,
-                            padding: "1px 4px",
-                            whiteSpace: "nowrap",
-                          }}
+                        <span className="font-sans text-[9px] tracking-normal text-link rounded-[2px] py-0.25 px-1 whitespace-nowrap"
+                          style={{ border: "1px solid " + C.buySoft }}
                         >
                           Auto
                         </span>
                       ) : (
-                        <Button
+                        <Button className="font-sans text-[9px] tracking-normal text-ink-secondary bg-transparent border border-line rounded-[2px] py-0.25 px-1 cursor-pointer whitespace-nowrap"
                           type="button"
                           onClick={() => setRaw((st) => ({ ...st, autoBrokerage: true }))}
-                          style={{
-                            fontFamily: MONO,
-                            fontSize: 9,
-                            letterSpacing: "normal",
-                            color: C.mute,
-                            background: "transparent",
-                            border: "1px solid " + C.line,
-                            borderRadius: 2,
-                            padding: "1px 4px",
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                          }}
                         >
                           Reset
                         </Button>
@@ -3981,8 +3724,8 @@ export default function RentVsBuy() {
                     }
                   />
                 </div>
-                <div style={{ marginTop: 10 }}>
-                  <div className="flex" style={{ height: 12, borderRadius: 2, overflow: "hidden" }}>
+                <div className="mt-2.5">
+                  <div className="flex h-3 rounded-[2px] overflow-hidden">
                     {[
                       ["FHSA", r.fhsaUse, C.buyLine],
                       ["RRSP", r.hbpUse, BUY_TINTS[2]],
@@ -3994,41 +3737,40 @@ export default function RentVsBuy() {
                       ) : null
                     )}
                   </div>
-                  <div className="flex items-baseline justify-between" style={{ marginTop: 5 }}>
-                    <span style={{ fontFamily: SANS, fontSize: 13, color: C.mute }}>
+                  <div className="flex items-baseline justify-between mt-1.25">
+                    <span className="font-sans text-[13px] text-ink-secondary">
                       Adds up to your cash to close
                     </span>
-                    <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 600, color: C.buy }}>
+                    <span className="font-sans text-[14px] font-semibold text-link">
                       {usd(r.sourcesTotal)}
                     </span>
                   </div>
                   {!p.autoBrokerage && r.shortfall > 0.5 && (
-                    <div style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 4, lineHeight: 1.4 }}>
+                    <div className="font-sans text-[12px] text-ink-secondary mt-1 leading-[1.4]">
                       Your sources leave {usd(r.shortfall)} uncovered, so it's counted as extra
                       cash. Hit Reset to let the brokerage figure balance again.
                     </div>
                   )}
                 </div>
                 {r.overCap && !US && (
-                  <div style={{ background: C.warnBg, borderRadius: "var(--ds-radius-control)", padding: 8, marginTop: 8, fontFamily: SANS, fontSize: 13, color: C.warnInk, lineHeight: 1.4 }}>
+                  <div className="bg-[var(--ds-error-bg)] rounded-control p-2 mt-2 font-sans text-[13px] text-[var(--ds-error-text)] leading-[1.4]">
                     Over the limit — FHSA caps at {usd(r.fhsaCap)} and the HBP at {usd(r.hbpCap)}
                     {p.couple ? " for a couple" : " per person"}. Capped in the maths.
                   </div>
                 )}
                 {r.hbpUse > 0 && (
                   <>
-                    <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: 10 }}>
-                      <input
+                    <label className="flex items-center gap-2 cursor-pointer mt-2.5">
+                      <input className="accent-link w-3.5 h-3.5"
                         type="checkbox"
                         checked={raw.hbpRepay}
                         onChange={(e) => set("hbpRepay")(e.target.checked)}
-                        style={{ accentColor: C.buy, width: 14, height: 14 }}
                       />
-                      <span style={{ fontFamily: SANS, fontSize: 14 }}>
+                      <span className="font-sans text-[14px]">
                         Repay the HBP on schedule
                       </span>
                     </label>
-                    <div style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 3 }}>
+                    <div className="font-sans text-[12px] text-ink-secondary mt-0.75">
                       {p.hbpRepay
                         ? usd(r.hbpAnnual) + "/yr for 15 years, starting in year 3. It goes back into your RRSP and keeps compounding."
                         : "Skipping it adds " + usd(r.hbpAnnual) + " to your taxable income each year for 15 years."}
@@ -4060,38 +3802,38 @@ export default function RentVsBuy() {
               </Group>
 
               {r.premium > 0 && (
-                <div style={{ background: C.panelAlt, borderRadius: "var(--ds-radius-control)", padding: 10, marginTop: -8 }} className="mb-6">
+                <div className="mb-6 bg-overlay rounded-control p-2.5 -mt-2">
                   <Eyebrow>
                     Mortgage insurance{" "}
                     <Info label="mortgage insurance" text="The CMHC premium. Anyone putting down less than 20% has to buy it, and it protects the lender rather than you. It is added to the mortgage instead of paid up front, so you pay interest on it for the life of the loan." />
                   </Eyebrow>
-                  <div className="flex items-baseline justify-between" style={{ marginTop: 4 }}>
-                    <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="font-sans text-[14px] text-ink-secondary">
                       {r.premiumPct}% of the loan, added to it
                     </span>
-                    <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 600 }}>
+                    <span className="font-sans text-[14px] font-semibold">
                       {usd(r.premium)}
                     </span>
                   </div>
                 </div>
               )}
               {US && r.totPMI > 0.5 && (
-                <div style={{ background: C.panelAlt, borderRadius: "var(--ds-radius-control)", padding: 10, marginTop: -8 }} className="mb-6">
+                <div className="mb-6 bg-overlay rounded-control p-2.5 -mt-2">
                   <Eyebrow>
                     Mortgage insurance{" "}
                     <Info label="mortgage insurance" text="Private mortgage insurance, or PMI. Required below 20% down, it protects the lender rather than you, and it stops automatically once you owe 78% of the original purchase price." />
                   </Eyebrow>
-                  <div className="flex items-baseline justify-between" style={{ marginTop: 4 }}>
-                    <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="font-sans text-[14px] text-ink-secondary">
                       {r.pmiEndsMonth
                         ? "Drops off in year " + Math.ceil(r.pmiEndsMonth / 12)
                         : "Still running at the horizon"}
                     </span>
-                    <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 600 }}>
+                    <span className="font-sans text-[14px] font-semibold">
                       {usd(r.totPMI)}
                     </span>
                   </div>
-                  <div style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 4, lineHeight: 1.4 }}>
+                  <div className="font-sans text-[12px] text-ink-secondary mt-1 leading-[1.4]">
                     Cancels automatically at 78% of the original price, not of
                     what the home is worth by then — so appreciation does not
                     get you out of it early. It is not deductible.
@@ -4099,8 +3841,8 @@ export default function RentVsBuy() {
                 </div>
               )}
               {r.belowMin && (
-                <div style={{ background: C.warnBg, borderRadius: "var(--ds-radius-control)", padding: 10, marginTop: -8 }} className="mb-6">
-                  <div style={{ fontFamily: SANS, fontSize: 14, color: C.warnInk, lineHeight: 1.4 }}>
+                <div className="mb-6 bg-[var(--ds-error-bg)] rounded-control p-2.5 -mt-2">
+                  <div className="font-sans text-[14px] text-[var(--ds-error-text)] leading-[1.4]">
                     {US
                       ? "Below 3% down, which is the floor on a conventional loan. You need at least " + usd(r.minDown) + "."
                       : r.insurable
@@ -4134,18 +3876,17 @@ export default function RentVsBuy() {
               </Group>
               {!US && (
                 <>
-                  <label className="flex items-center gap-2 cursor-pointer" style={{ marginTop: -12 }}>
-                    <input
+                  <label className="flex items-center gap-2 cursor-pointer -mt-3">
+                    <input className="accent-link w-3.5 h-3.5"
                       type="checkbox"
                       checked={raw.hog}
                       onChange={(e) => set("hog")(e.target.checked)}
-                      style={{ accentColor: C.buy, width: 14, height: 14 }}
                     />
-                    <span style={{ fontFamily: SANS, fontSize: 14 }}>
+                    <span className="font-sans text-[14px]">
                       Claim the Home Owner Grant
                     </span>
                   </label>
-                  <div style={{ fontFamily: SANS, fontSize: 12, color: C.mute, marginTop: 3, marginBottom: 20 }}>
+                  <div className="font-sans text-[12px] text-ink-secondary mt-0.75 mb-5">
                     $570 off your tax bill, phasing out above $2.075M assessed.
                   </div>
                 </>
@@ -4164,7 +3905,7 @@ export default function RentVsBuy() {
                 </Group>
               )}
               {US && (
-                <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: -12, marginBottom: 20, lineHeight: 1.45 }}>
+                <div className="font-sans text-[13px] text-ink-secondary -mt-3 mb-5 leading-[1.45]">
                   {r.totTaxBenefit > 0.5
                     ? "Itemizing beats the standard deduction, and the mortgage is worth " +
                       usd(r.totTaxBenefit) + " over " + p.horizonYears + " years. " +
@@ -4204,7 +3945,7 @@ export default function RentVsBuy() {
                 )}
               </Group>
               {p.suiteRentMo <= 0 && (
-                <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: -12, marginBottom: 20, lineHeight: 1.45 }}>
+                <div className="font-sans text-[13px] text-ink-secondary -mt-3 mb-5 leading-[1.45]">
                   No suite, so no rental income, no vacancy risk, and none of the house is
                   deductible. The whole place is treated as your principal residence.
                 </div>
@@ -4231,21 +3972,21 @@ export default function RentVsBuy() {
             {/* Signature chart */}
             <Panel className="mb-5">
               <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
-                <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0 }}>
+                <h2 className="font-sans text-[19px] font-semibold m-0">
                   Net worth, side by side
                 </h2>
                 <div className="flex items-center gap-4">
                   <span className="flex items-center gap-2">
-                    <span style={{ width: 14, height: 3, background: C.buyLine, display: "inline-block" }} />
-                    <span style={{ fontFamily: MONO, fontSize: 13, color: C.buy }}>Owning</span>
+                    <span className="w-3.5 h-0.75 bg-chart-2 inline-block" />
+                    <span className="font-sans text-[13px] text-link">Owning</span>
                   </span>
                   <span className="flex items-center gap-2">
-                    <span style={{ width: 14, height: 3, background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)", display: "inline-block" }} />
-                    <span style={{ fontFamily: MONO, fontSize: 13, color: C.rent }}>Renting</span>
+                    <span className="w-3.5 h-0.75 inline-block" style={{ background: "repeating-linear-gradient(90deg, " + C.rent + " 0 6px, transparent 6px 10px)" }} />
+                    <span className="font-sans text-[13px] text-chart-1">Renting</span>
                   </span>
                 </div>
               </div>
-              <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 10 }}>
+              <p className="font-sans text-[13px] text-ink-secondary mb-2.5">
                 The shaded gap is whoever is ahead. It changes color the month the lead flips.
               </p>
 
@@ -4276,22 +4017,14 @@ export default function RentVsBuy() {
                         const d = payload[0].payload;
                         const lead = d.buy - d.rent;
                         return (
-                          <div
-                            style={{
-                              background: C.field,
-                              border: "1px solid " + C.line,
-                              borderRadius: "var(--ds-radius-control)",
-                              padding: "8px 10px",
-                              fontFamily: MONO,
-                              fontSize: 14,
-                            }}
+                          <div className="bg-raised border border-line rounded-control py-2 px-2.5 font-sans text-[14px]"
                           >
-                            <div style={{ color: C.mute, fontSize: 12, marginBottom: 4 }}>
+                            <div className="text-ink-secondary text-[12px] mb-1">
                               {d.t === 0 ? "Today" : "Year " + d.t.toFixed(1)}
                             </div>
-                            <div style={{ color: C.buy }}>Own · {usd(d.buy)}</div>
-                            <div style={{ color: C.rent }}>Rent · {usd(d.rent)}</div>
-                            <div style={{ color: C.ink, marginTop: 4, borderTop: "1px solid " + C.line, paddingTop: 4 }}>
+                            <div className="text-link">Own · {usd(d.buy)}</div>
+                            <div className="text-chart-1">Rent · {usd(d.rent)}</div>
+                            <div className="text-ink mt-1 border-t border-line pt-1">
                               {lead >= 0 ? "Own" : "Rent"} ahead {usd(Math.abs(lead))}
                             </div>
                           </div>
@@ -4323,18 +4056,18 @@ export default function RentVsBuy() {
               </div>
 
               <div className="grid grid-cols-2 gap-4 mt-4">
-                <div style={{ borderLeft: "3px solid " + C.buy, paddingLeft: 10 }}>
+                <div className="border-l-3 border-link pl-2.5">
                   <Eyebrow tone={C.buy}>Owner at year {p.horizonYears}</Eyebrow>
-                  <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 600 }}>{usd(r.finalBuy)}</div>
-                  <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute }}>
+                  <div className="font-sans text-[22px] font-semibold">{usd(r.finalBuy)}</div>
+                  <div className="font-sans text-[13px] text-ink-secondary">
                     Home equity plus {usd(r.buyTaxableEnd)} invested
                     {r.buyRegEnd > 0 ? " and " + usd(r.buyRegEnd * (1 - p.marginalTaxPct / 100)) + " in RRSP after tax" : ""}
                   </div>
                 </div>
-                <div style={{ borderLeft: "3px solid " + C.rent, paddingLeft: 10 }}>
+                <div className="border-l-3 border-chart-1 pl-2.5">
                   <Eyebrow tone={C.rent}>Renter at year {p.horizonYears}</Eyebrow>
-                  <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 600 }}>{usd(r.finalRent)}</div>
-                  <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute }}>
+                  <div className="font-sans text-[22px] font-semibold">{usd(r.finalRent)}</div>
+                  <div className="font-sans text-[13px] text-ink-secondary">
                     {usd(r.rentTaxableEnd)} taxable
                     {r.rentRegEnd > 0 ? " plus " + usd(r.rentRegEnd * (1 - p.marginalTaxPct / 100)) + " registered, after tax" : ""}
                   </div>
@@ -4345,20 +4078,20 @@ export default function RentVsBuy() {
             {/* Monthly cost + mortgage helper */}
             <div className="rvb-pair mb-5">
               <Panel>
-                <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+                <h2 className="font-sans text-[19px] font-semibold m-0 mb-0.5">
                   What you pay each month
                 </h2>
-                <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 14 }}>
+                <p className="font-sans text-[13px] text-ink-secondary mb-3.5">
                   First-year average.
                 </p>
 
                 <div className="mb-1 flex items-baseline justify-between">
                   <Eyebrow tone={C.buy}>Own · full cost</Eyebrow>
-                  <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600 }}>
+                  <span className="font-sans text-[15px] font-semibold">
                     {usd(y1.gross)}
                   </span>
                 </div>
-                <div className="flex" style={{ height: 14, width: (y1.gross / barMax) * 100 + "%" }}>
+                <div className="flex h-3.5" style={{ width: (y1.gross / barMax) * 100 + "%" }}>
                   {costParts.map(([n2, v], idx) => (
                     <div
                       key={n2}
@@ -4369,15 +4102,10 @@ export default function RentVsBuy() {
                 </div>
                 {y1.suite > 0.5 && (
                   <div className="mb-3" style={{ width: (y1.gross / barMax) * 100 + "%" }}>
-                    <div
-                      style={{
-                        height: 5,
-                        marginTop: 2,
-                        width: Math.min(100, (y1.suite / y1.gross) * 100) + "%",
-                        background: C.signal,
-                      }}
+                    <div className="h-1.25 mt-0.5 bg-[var(--ds-warning-text)]"
+                      style={{ width: Math.min(100, (y1.suite / y1.gross) * 100) + "%" }}
                     />
-                    <div style={{ fontFamily: MONO, fontSize: 12, color: C.mute, marginTop: 2 }}>
+                    <div className="font-sans text-[12px] text-ink-secondary mt-0.5">
                       SUITE COVERS {Math.round((y1.suite / y1.gross) * 100)}%
                     </div>
                   </div>
@@ -4386,40 +4114,40 @@ export default function RentVsBuy() {
 
                 <div className="mb-1 flex items-baseline justify-between">
                   <Eyebrow tone={C.rent}>Rent</Eyebrow>
-                  <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 600 }}>
+                  <span className="font-sans text-[15px] font-semibold">
                     {usd(y1r.total)}
                   </span>
                 </div>
                 <div
-                  className="mb-4"
-                  style={{ height: 14, width: (y1r.total / barMax) * 100 + "%", background: C.rent }}
+                  className="mb-4 h-3.5 bg-chart-1"
+                  style={{ width: (y1r.total / barMax) * 100 + "%" }}
                 />
 
                 {costParts.map(([n2, v], idx) => (
-                  <div key={n2} className="flex items-center justify-between" style={{ padding: "3px 0" }}>
+                  <div key={n2} className="flex items-center justify-between py-0.75 px-0">
                     <span className="flex items-center gap-2">
-                      <span style={{ width: 8, height: 8, background: BUY_TINTS[idx % BUY_TINTS.length], display: "inline-block" }} />
-                      <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>{n2}</span>
+                      <span className="w-2 h-2 inline-block" style={{ background: BUY_TINTS[idx % BUY_TINTS.length] }} />
+                      <span className="font-sans text-[14px] text-ink-secondary">{n2}</span>
                     </span>
-                    <span style={{ fontFamily: MONO, fontSize: 14 }}>{usd(v)}</span>
+                    <span className="font-sans text-[14px]">{usd(v)}</span>
                   </div>
                 ))}
                 {y1.suite > 0.5 && (
-                  <div className="flex items-center justify-between" style={{ padding: "3px 0" }}>
+                  <div className="flex items-center justify-between py-0.75 px-0">
                     <span className="flex items-center gap-2">
-                      <span style={{ width: 8, height: 8, background: C.signal, display: "inline-block" }} />
-                      <span style={{ fontFamily: SANS, fontSize: 14, color: C.mute }}>
+                      <span className="w-2 h-2 bg-[var(--ds-warning-text)] inline-block" />
+                      <span className="font-sans text-[14px] text-ink-secondary">
                         {y1.suiteTax > 0.5
                           ? "Suite rent, after vacancy and tax"
                           : "Suite rent — deductions cover the tax"}
                       </span>
                     </span>
-                    <span style={{ fontFamily: MONO, fontSize: 14, color: C.buy }}>
+                    <span className="font-sans text-[14px] text-link">
                       −{usd(y1.suite)}
                     </span>
                   </div>
                 )}
-                <div style={{ borderTop: "1px solid " + C.line, marginTop: 8, paddingTop: 8 }}>
+                <div className="border-t border-line mt-2 pt-2">
                   <Row label="Owning, out of your pocket" value={usd(y1.total)} strong />
                   <Row
                     label={y1.total > y1r.total ? "Owning costs more, per month" : "Renting costs more, per month"}
@@ -4427,25 +4155,25 @@ export default function RentVsBuy() {
                     tone={y1.total > y1r.total ? C.rent : C.buy}
                     strong
                   />
-                  <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginTop: 6, lineHeight: 1.45 }}>
+                  <div className="font-sans text-[13px] text-ink-secondary mt-1.5 leading-[1.45]">
                     That difference is exactly what the cheaper side invests every month.
                   </div>
                 </div>
               </Panel>
 
               <Panel>
-                <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+                <h2 className="font-sans text-[19px] font-semibold m-0 mb-0.5">
                   Your mortgage
                 </h2>
-                <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
+                <p className="font-sans text-[13px] text-ink-secondary mb-3">
                   {usd(r.loan)} at {p.rate}%, {p.amortYears}-year amortization.
                 </p>
 
-                <div style={{ background: C.panelAlt, borderRadius: "var(--ds-radius-control)", padding: 12, marginBottom: 12 }}>
+                <div className="bg-overlay rounded-control p-3 mb-3">
                   <Eyebrow>Principal &amp; interest</Eyebrow>
-                  <div style={{ fontFamily: MONO, fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
+                  <div className="font-sans text-[28px] font-semibold leading-[1.2]">
                     {usd(r.payment)}
-                    <span style={{ fontSize: 14, color: C.mute, fontWeight: 400 }}> /mo</span>
+                    <span className="text-[14px] text-ink-secondary font-normal"> /mo</span>
                   </div>
                 </div>
 
@@ -4523,7 +4251,7 @@ export default function RentVsBuy() {
                   tone={r.breakPenalty > 0 ? C.rent : C.buy}
                 />
 
-                <div className="mt-3" style={{ width: "100%", height: 110 }}>
+                <div className="mt-3 w-full h-27.5">
                   <ResponsiveContainer>
                     <BarChart data={r.amort} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap={1}>
                       <XAxis
@@ -4539,10 +4267,10 @@ export default function RentVsBuy() {
                           if (!active || !payload || !payload.length) return null;
                           const d = payload[0].payload;
                           return (
-                            <div style={{ background: C.field, border: "1px solid " + C.line, padding: "6px 9px", fontFamily: MONO, fontSize: 13 }}>
-                              <div style={{ color: C.mute, fontSize: 12 }}>YEAR {label}</div>
-                              <div style={{ color: C.buy }}>Principal {usd(d.principal)}</div>
-                              <div style={{ color: C.mute }}>Interest {usd(d.interest)}</div>
+                            <div className="bg-raised border border-line py-1.5 px-2.25 font-sans text-[13px]">
+                              <div className="text-ink-secondary text-[12px]">YEAR {label}</div>
+                              <div className="text-link">Principal {usd(d.principal)}</div>
+                              <div className="text-ink-secondary">Interest {usd(d.interest)}</div>
                             </div>
                           );
                         }}
@@ -4552,7 +4280,7 @@ export default function RentVsBuy() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{ fontFamily: SANS, fontSize: 12, color: C.mute }}>
+                <div className="font-sans text-[12px] text-ink-secondary">
                   Each bar is one year of payments. Dark is equity you keep; light is interest
                   the bank keeps.
                 </div>
@@ -4562,10 +4290,10 @@ export default function RentVsBuy() {
             {/* Sensitivity and caveats pair up on wide screens */}
             <div className="rvb-pair-wide mb-5">
             <Panel>
-              <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+              <h2 className="font-sans text-[19px] font-semibold m-0 mb-0.5">
                 What would change the answer
               </h2>
-              <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
+              <p className="font-sans text-[13px] text-ink-secondary mb-3">
                 Owning's lead at year {p.horizonYears} if one assumption moves. Negative means
                 renting wins.
               </p>
@@ -4580,26 +4308,15 @@ export default function RentVsBuy() {
                   <Eyebrow>{label}</Eyebrow>
                   <div className="grid grid-cols-5 gap-1 mt-1">
                     {rows.map((s) => (
-                      <div
+                      <div className="rounded-control py-1.25 px-1 text-center"
                         key={s.d}
-                        style={{
-                          background: s.cur ? C.panelAlt : "transparent",
-                          border: "1px solid " + (s.cur ? C.line : "transparent"),
-                          borderRadius: "var(--ds-radius-control)",
-                          padding: "5px 4px",
-                          textAlign: "center",
-                        }}
+                        style={{ background: s.cur ? C.panelAlt : "transparent", border: "1px solid " + (s.cur ? C.line : "transparent") }}
                       >
-                        <div style={{ fontFamily: MONO, fontSize: 12, color: C.mute }}>
+                        <div className="font-sans text-[12px] text-ink-secondary">
                           {s.label}
                         </div>
-                        <div
-                          style={{
-                            fontFamily: MONO,
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: s.v >= 0 ? C.buy : C.rent,
-                          }}
+                        <div className="font-sans text-[14px] font-semibold"
+                          style={{ color: s.v >= 0 ? C.buy : C.rent }}
                         >
                           {s.v >= 0 ? "+" : "−"}
                           {compact(Math.abs(s.v))}
@@ -4612,10 +4329,10 @@ export default function RentVsBuy() {
             </Panel>
 
             <Panel>
-              <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0, marginBottom: 2 }}>
+              <h2 className="font-sans text-[19px] font-semibold m-0 mb-0.5">
                 What this still can't tell you
               </h2>
-              <p style={{ fontFamily: SANS, fontSize: 13, color: C.mute, marginBottom: 12 }}>
+              <p className="font-sans text-[13px] text-ink-secondary mb-3">
                 Every one of these can outweigh the number at the top of the page.
               </p>
               <div>
@@ -4645,13 +4362,13 @@ export default function RentVsBuy() {
                     : []),
                   ["Life doesn't hold still", "The breakeven year assumes you stay. Job moves, kids, and separations don't wait for it."],
                 ].map(([t, d]) => (
-                  <div key={t} style={{ padding: "8px 0", borderBottom: "1px dotted " + C.line }}>
-                    <div style={{ fontFamily: SANS, fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{t}</div>
-                    <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, lineHeight: 1.45 }}>{d}</div>
+                  <div className="py-2 px-0 border-b border-dotted border-line" key={t}>
+                    <div className="font-sans text-[14px] font-semibold mb-0.5">{t}</div>
+                    <div className="font-sans text-[13px] text-ink-secondary leading-[1.45]">{d}</div>
                   </div>
                 ))}
               </div>
-              <div style={{ fontFamily: SANS, fontSize: 13, color: C.mute, lineHeight: 1.5, marginTop: 12 }}>
+              <div className="font-sans text-[13px] text-ink-secondary leading-[1.5] mt-3">
                 {US
                   ? "State and local programmes — first-time buyer credits, homestead exemptions, " +
                     "assessment caps — vary enormously and are not modelled. Nor are points paid " +
@@ -4666,23 +4383,13 @@ export default function RentVsBuy() {
             {/* Ledger — full width, it is a wide table */}
             <Panel className="mb-5">
               <div className="flex items-baseline justify-between">
-                <h2 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, margin: 0 }}>
+                <h2 className="font-sans text-[19px] font-semibold m-0">
                   Year-by-year ledger
                 </h2>
-                <Button
+                <Button className="font-sans text-[13px] text-ink bg-transparent border border-line rounded-control py-1 px-2.25 cursor-pointer"
                   aria-expanded={showLedger}
                   aria-controls="projection-ledger"
                   onClick={() => setShowLedger((s) => !s)}
-                  style={{
-                    fontFamily: MONO,
-                    fontSize: 13,
-                    color: C.ink,
-                    background: "transparent",
-                    border: "1px solid " + C.line,
-                    borderRadius: "var(--ds-radius-control)",
-                    padding: "4px 9px",
-                    cursor: "pointer",
-                  }}
                 >
                   {showLedger ? "Hide" : "Show"}
                 </Button>
@@ -4692,7 +4399,7 @@ export default function RentVsBuy() {
                 <div id="projection-ledger" className="mt-3">
                   <DataTable maxHeight={340} aria-label="Year-by-year financial projection">
                     <thead>
-                      <tr style={{ background: C.panel }}>
+                      <tr className="bg-raised">
                         {[
                           ["Year", false],
                           ["Home value", false],
@@ -4732,22 +4439,17 @@ export default function RentVsBuy() {
                       {r.years.map((y) => {
                         const lead = y.buyNW - y.rentNW;
                         return (
-                          <tr key={y.year} style={{ borderBottom: "1px solid " + C.line }}>
-                            <td style={{ padding: "5px 7px", color: C.mute }}>{y.year}</td>
-                            <td style={{ padding: "5px 7px", textAlign: "right" }}>{compact(y.homeValue)}</td>
-                            <td className="rvb-hide-sm" style={{ padding: "5px 7px", textAlign: "right", color: C.mute }}>{compact(y.balance)}</td>
-                            <td className="rvb-hide-sm" style={{ padding: "5px 7px", textAlign: "right" }}>{compact(y.equity)}</td>
-                            <td className="rvb-hide-sm" style={{ padding: "5px 7px", textAlign: "right", color: C.mute }}>{compact(y.buyOut)}</td>
-                            <td className="rvb-hide-sm" style={{ padding: "5px 7px", textAlign: "right", color: C.mute }}>{compact(y.rentOut)}</td>
-                            <td style={{ padding: "5px 7px", textAlign: "right", color: C.buy }}>{compact(y.buyNW)}</td>
-                            <td style={{ padding: "5px 7px", textAlign: "right", color: C.rent }}>{compact(y.rentNW)}</td>
-                            <td
-                              style={{
-                                padding: "5px 7px",
-                                textAlign: "right",
-                                fontWeight: 600,
-                                color: lead >= 0 ? C.buy : C.rent,
-                              }}
+                          <tr className="border-b border-line" key={y.year}>
+                            <td className="py-1.25 px-1.75 text-ink-secondary">{y.year}</td>
+                            <td className="py-1.25 px-1.75 text-right">{compact(y.homeValue)}</td>
+                            <td className="rvb-hide-sm py-1.25 px-1.75 text-right text-ink-secondary">{compact(y.balance)}</td>
+                            <td className="rvb-hide-sm py-1.25 px-1.75 text-right">{compact(y.equity)}</td>
+                            <td className="rvb-hide-sm py-1.25 px-1.75 text-right text-ink-secondary">{compact(y.buyOut)}</td>
+                            <td className="rvb-hide-sm py-1.25 px-1.75 text-right text-ink-secondary">{compact(y.rentOut)}</td>
+                            <td className="py-1.25 px-1.75 text-right text-link">{compact(y.buyNW)}</td>
+                            <td className="py-1.25 px-1.75 text-right text-chart-1">{compact(y.rentNW)}</td>
+                            <td className="py-1.25 px-1.75 text-right font-semibold"
+                              style={{ color: lead >= 0 ? C.buy : C.rent }}
                             >
                               {(lead >= 0 ? "+" : "−") + compact(Math.abs(lead))}
                             </td>
@@ -4760,14 +4462,7 @@ export default function RentVsBuy() {
               )}
             </Panel>
 
-            <p
-              style={{
-                fontFamily: SANS,
-                fontSize: 13,
-                color: C.mute,
-                lineHeight: 1.6,
-                marginTop: 16,
-              }}
+            <p className="font-sans text-[13px] text-ink-secondary leading-[1.6] mt-4"
             >
               Assumptions: you sell at the end of the period and pay selling costs, and the
               renter pays tax on investment gains — set that to 0 if the money sits in a{" "}
@@ -4819,14 +4514,7 @@ export default function RentVsBuy() {
                 : "GST applies to new builds only and is not included."}{" "}
               Everything is in nominal dollars. This is a model, not advice.
             </p>
-            <p
-              style={{
-                fontFamily: MONO,
-                fontSize: 12,
-                color: C.mute,
-                marginTop: 8,
-                letterSpacing: "normal",
-              }}
+            <p className="font-sans text-[12px] text-ink-secondary mt-2 tracking-normal"
             >
               {"v" +
                 (typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev") +
@@ -4843,19 +4531,14 @@ export default function RentVsBuy() {
         {/* The page's only other links. Without these a crawler that lands
             on one calculator has no route to the other five, and no way
             back out to the rest of the site. */}
-        <footer
-          style={{
-            marginTop: 40, paddingTop: 20,
-            borderTop: "1px solid " + C.line,
-            fontFamily: SANS, fontSize: 14, color: C.mute, lineHeight: 1.9,
-          }}
+        <footer className="mt-10 pt-5 border-t border-line font-sans text-[14px] text-ink-secondary leading-[1.9]"
         >
-          <nav aria-label="All calculators" style={{ marginBottom: 10 }}>
+          <nav className="mb-2.5" aria-label="All calculators">
 
             {ROUTES.map((rt, i) => (
               <React.Fragment key={rt.id}>
-                {i > 0 && <span style={{ color: C.line }}> / </span>}
-                <a
+                {i > 0 && <span className="text-line"> / </span>}
+                <a className="no-underline"
                   href={rt.path}
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
@@ -4865,7 +4548,7 @@ export default function RentVsBuy() {
                     setTab(rt.id);
                     window.history.pushState(null, "", rt.path + stateToHash(raw));
                   }}
-                  style={{ color: tab === rt.id ? C.ink : C.buy, textDecoration: "none" }}
+                  style={{ color: tab === rt.id ? C.ink : C.buy }}
                 >
                   {rt.label}
                 </a>
@@ -4873,15 +4556,15 @@ export default function RentVsBuy() {
             ))}
           </nav>
           <div>
-            <a href="https://rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
+            <a className="text-link no-underline" href="https://rishabhdoshi.com">
               Home
             </a>
-            <span style={{ color: C.line }}> / </span>
-            <a href="https://experiments.rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
+            <span className="text-line"> / </span>
+            <a className="text-link no-underline" href="https://experiments.rishabhdoshi.com">
               Experiments
             </a>
-            <span style={{ color: C.line }}> / </span>
-            <a href="mailto:hello@rishabhdoshi.com" style={{ color: C.buy, textDecoration: "none" }}>
+            <span className="text-line"> / </span>
+            <a className="text-link no-underline" href="mailto:hello@rishabhdoshi.com">
               Email
             </a>
           </div>

@@ -211,7 +211,7 @@ src/main.jsx           entry point, registers the service worker
 src/sw.template.js     offline cache; __BUILD__ and __ROUTES__ are stamped in. Its list
                        must match files in dist/: cache.addAll rejects on one 404 and
                        the new worker never installs
-src/design.css         app-specific layout over the shared components
+src/design.css         the app's grid layouts and breakpoints, in the components layer
 src/fonts.css          placeholder; Host Grotesk comes from the design-system tokens
 src/tw.css             the app stylesheet: Tailwind v4, Felt's theme, shared and app CSS
 src/static/index.template.html   rendered once per route by build.sh
@@ -376,8 +376,9 @@ the design-system repository's central `npm run rollout` command.
 
 Styles are built with Tailwind CSS v4 (`@tailwindcss/cli`). `src/tw.css` imports
 Tailwind, Felt's theme (`@doshi-experiments/design-system/tailwind.css`), the shared
-`components.css` and `legacy.css` in the components layer, so utilities can override
-them, and then `design.css`. Felt's utilities read the same `--ds-*` tokens as the
+`components.css`, `legacy.css` and the app's `design.css` (its grids and breakpoints) in
+the components layer, so utilities override them. Markup is styled with utilities; inline
+styles remain only where a value depends on state. Felt's utilities read the same `--ds-*` tokens as the
 charts' `palette()`: `bg-raised`, `text-ink-secondary`, `border-line`, `action-link`,
 `signal`. There is no `text-signal`; owning text stays `action-link`. The CLI keeps the
 package's `url()`s as written, so `build.sh` copies `fonts/` and `felt/` beside

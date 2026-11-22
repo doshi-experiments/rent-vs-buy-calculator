@@ -1,4 +1,69 @@
-/* Application composition; shared components own their appearance. */
+/* Application layout over the shared components, in the components layer: utilities in
+   App.jsx override it. Shared components own their appearance. */
+.rvb input[type=number]::-webkit-outer-spin-button,
+.rvb input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.rvb input[type=number] { -moz-appearance: textfield; }
+.rvb table { border-collapse: collapse; }
+@media (prefers-reduced-motion: reduce) { .rvb * { transition: none !important; } }
+
+/* Shell: widen as the screen does, instead of stranding it at 1180px */
+.rvb-shell { max-width: 1180px; margin-left: auto; margin-right: auto; }
+@media (min-width: 1360px) { .rvb-shell { max-width: 1300px; } }
+@media (min-width: 1500px) { .rvb-shell { max-width: 1400px; } }
+@media (min-width: 1700px) { .rvb-shell { max-width: 1580px; } }
+@media (min-width: 1900px) { .rvb-shell { max-width: 1720px; } }
+@media (min-width: 2200px) { .rvb-shell { max-width: 1900px; } }
+
+/* Inputs beside results */
+.rvb-main { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) { .rvb-main { grid-template-columns: 340px minmax(0, 1fr); } }
+@media (min-width: 1500px) { .rvb-main { grid-template-columns: 372px minmax(0, 1fr); } }
+@media (min-width: 1900px) { .rvb-main { grid-template-columns: 400px minmax(0, 1fr); } }
+.rvb-col { min-width: 0; }
+
+/* Cards that pair up once there is room for them */
+.rvb-pair { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .rvb-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rvb-pair-wide { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1500px) { .rvb-pair-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Rental units: as many across as fit, rather than two very wide ones */
+.rvb-units { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 700px) { .rvb-units { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .rvb-units { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+/* Metric strip: four across when there is room, two up otherwise */
+.rvb-metrics { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1100px) { .rvb-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Side-by-side comparison; the difference column is the first to go */
+.rvb-cmp { width: 100%; border-collapse: collapse; }
+.rvb-cmp :is(th, td) { padding-left: 16px; vertical-align: baseline; }
+.rvb-cmp :is(th[scope="row"], thead td) { width: 100%; padding-left: 0; text-align: left; hyphens: auto; }
+.rvb-cmp thead th { text-align: right; font-weight: inherit; }
+@media (max-width: 760px) {
+  .rvb-cmp .cmp-d { display: none; }
+}
+/* two money columns and the longest label have to share 242px at 320 */
+@media (max-width: 400px) {
+  .rvb-cmp { --cmp-num: 12px; --cmp-label: 13px; }
+  .rvb-cmp :is(th, td) { padding-left: 8px; }
+}
+
+/* Tablet: the inputs span the full width, so fit more fields per row */
+.rvb-fields { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) and (max-width: 1023px) {
+  .rvb-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Ledger: drop the secondary columns rather than force a sideways scroll */
+@media (max-width: 700px) { .rvb-hide-sm { display: none; } }
+
+/* A wider chart deserves to be taller too */
+.rvb-chart { width: 100%; height: 300px; }
+@media (min-width: 1400px) { .rvb-chart { height: 360px; } }
+@media (min-width: 1900px) { .rvb-chart { height: 400px; } }
+
 .rvb-shell > .ds-site-header {width:100%; max-width:none}
 .calc-context {font:400 .875rem/1.55 var(--ds-font-body); color:var(--ds-text-secondary); margin:8px 0 12px; max-width:64ch}
 .calc-assumptions {max-width:64ch; margin:16px 0}
@@ -18,7 +83,6 @@
 .rvb .ds-metric-value {font-variant-numeric:tabular-nums}
 @media(min-width:1024px) {.rvb .rvb-main {gap:28px; grid-template-columns:380px minmax(0,1fr)}}
 @media(max-width:620px) {
-  .rvb-shell {padding-left:16px; padding-right:16px}
   .rvb .ds-page-header {padding:24px 0}
   .rvb .ds-page-description {font-size:1rem}
   .rvb .rvb-metrics {grid-template-columns:1fr}
