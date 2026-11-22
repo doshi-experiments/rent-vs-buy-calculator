@@ -15,11 +15,8 @@
     "recharts": "2.15.4"
   },
   "devDependencies": {
-    "@ibm/plex-mono": "2.5.0",
-    "@ibm/plex-sans": "1.1.0",
-    "@ibm/plex-serif": "2.0.0",
     "@tailwindcss/cli": "4.3.5",
-    "esbuild": "0.21.5",
+    "esbuild": "0.25.12",
     "tailwindcss": "4.3.5",
     "wrangler": "^4.118.0"
   },
