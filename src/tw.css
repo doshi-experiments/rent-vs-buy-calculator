@@ -1,5 +1,6 @@
-/* The app stylesheet: Tailwind CSS v4 with Felt's theme, then the shared component CSS
-   and the app's own layout in the components layer, so a utility can override either.
+/* The app stylesheet: Tailwind CSS v4 with Felt's theme, then the shared component CSS in
+   the components layer, so a utility can override it, then the app's design.css unlayered,
+   because its rules still override utilities until they become utilities themselves.
    The Tailwind CLI keeps the package's url()s as written; build.sh copies fonts/ and
    felt/ beside dist/app.css to match. */
 @import "tailwindcss" source(none);

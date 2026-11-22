@@ -1,4 +1,5 @@
-import {Button, HelpPopover, SegmentedControl, NumericField, RangeField, Card, FieldGroup, Metric as SharedMetric, DataRow, DataTable, PageHeader, SiteHeader, Disclosure} from "@doshi-experiments/design-system/react";
+import {HelpPopover, SegmentedControl, NumericField, RangeField, Card, FieldGroup, Metric as SharedMetric, DataRow, DataTable, PageHeader, SiteHeader, Disclosure} from "@doshi-experiments/design-system/react";
+import {Button} from "@doshi-experiments/design-system/ui";
 import { resolveTokens } from "@doshi-experiments/design-system";
 import {createAppearanceController} from "@doshi-experiments/design-system/theme";
 import React, { useState, useMemo } from "react";
@@ -3519,7 +3520,9 @@ export default function RentVsBuy() {
         <SiteHeader project="calculator" appearance={appearance.preference}
           onAppearanceChange={(value) => appearanceController.setPreference(value)} />
         {/* Local calculator navigation stays separate from the wider site. */}
-        <nav className="calc-navigation" aria-label="Calculators">
+        {/* Underline tabs, as in every app's local navigation: the current tool is ink with
+            an action-link bar on the stitched rule; the others are secondary ink. */}
+        <nav className="flex flex-wrap items-center gap-x-6 gap-y-1 pt-3 mb-2 border-b-[1.5px] border-dashed border-stitch" aria-label="Calculators">
           {/* Real anchors with real hrefs, not buttons: this is the only
               internal linking on the site, so a crawler needs to be able
               to walk it to reach the other five pages. Clicks are still
@@ -3539,14 +3542,14 @@ export default function RentVsBuy() {
                 setTab(id);
                 window.history.pushState(null, "", ROUTE_BY_ID[id].path + stateToHash(raw));
               }}
-              className="calc-nav-link"
+              className="relative inline-flex items-center min-h-target text-[.875rem] leading-none font-semibold whitespace-nowrap no-underline text-ink-secondary hover:text-ink aria-[current=page]:text-ink aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-0 aria-[current=page]:after:-bottom-0.5 aria-[current=page]:after:h-[3px] aria-[current=page]:after:rounded-[2px] aria-[current=page]:after:bg-link focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-focus focus-visible:rounded-[6px]"
             >
               {label}
             </a>
           ))}
 
           {/* Which country's rules the whole page runs on */}
-          <div style={{ marginLeft: "auto", marginBottom: 6, marginRight: 10 }}>
+          <div className="ml-auto py-2 max-[620px]:order-first max-[620px]:ml-0 max-[620px]:basis-full">
             <Segmented
               options={[[false, "Canada"], [true, "United States"]]}
               value={!!raw.us}

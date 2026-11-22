@@ -388,8 +388,9 @@ intact.
 
 The calculator wears the shared Felt identity: Host Grotesk, warm grey wool and
 charcoal, a fibre texture (`#root` must not paint a background over it), and the
-signal, a raspberry-to-brick gradient under white text. The current tool tab and the
-apply button use `--ds-action-gradient`. Slider thumbs are the signal with a white
+signal, a raspberry-to-brick gradient under white text. The tools are underline tabs:
+the current one is ink over an `action-link` bar on a stitched rule. The apply button
+uses `--ds-action-gradient`. Slider thumbs are the signal with a white
 rim so they read in both appearances.
 
 Charts take colours from `resolveTokens()` in `palette()`. Owning is signal red
