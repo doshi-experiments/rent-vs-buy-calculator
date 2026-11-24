@@ -65,17 +65,12 @@
 @media (min-width: 1900px) { .rvb-chart { height: 400px; } }
 
 .rvb-shell > .ds-site-header {width:100%; max-width:none}
-.calc-context {font:400 .875rem/1.55 var(--ds-font-body); color:var(--ds-text-secondary); margin:8px 0 12px; max-width:64ch}
+.calc-context {font:400 var(--ds-text-caption)/1.55 var(--ds-font-body); color:var(--ds-text-secondary); margin:8px 0 12px; max-width:64ch}
 .calc-assumptions {max-width:64ch; margin:16px 0}
-.calc-assumptions p {font-size:.9375rem; line-height:1.55; margin:0 0 12px}
+.calc-assumptions p {font-size:var(--ds-text-caption); line-height:1.55; margin:0 0 12px}
 .rvb p {max-width:64ch}
 .rvb .ds-card + .ds-card {margin-top:20px}
 .rvb .ds-card > header {padding-bottom:20px}
-.rvb .ds-card h2 {letter-spacing:-.025em; font-weight:500}
-.rvb .ds-card input[type=checkbox] {width:20px; height:20px; accent-color:var(--ds-action-primary); flex-shrink:0}
-.rvb .ds-card label:has(>input[type=checkbox]) {min-height:44px; font-family:var(--ds-font-body)}
-.rvb .ds-card .ds-card {border:0; border-radius:0; padding:16px 0; background:transparent; box-shadow:none}
-.rvb .ds-card .ds-card::after {content:none}
 .rvb .recharts-wrapper {font-family:var(--ds-font-body); font-variant-numeric:tabular-nums}
 .rvb .recharts-cartesian-axis-tick-value {fill:var(--ds-text-secondary)}
 .rvb .recharts-default-tooltip {border-radius:var(--ds-radius-control)}
